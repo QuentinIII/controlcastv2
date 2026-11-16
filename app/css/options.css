@@ -449,8 +449,22 @@ input[type="checkbox"].opt_bool {
     cursor: pointer;
 }
 
-#save_settings.pending {
-    box-shadow: 0 0 0 2px #FEBF0F;
+#save_status {
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 24px;
+}
+
+#save_status.saved {
+    color: #69BD45;
+}
+
+#save_status.saving {
+    color: #FEBF0F;
+}
+
+#save_status.error {
+    color: #F26C6A;
 }
 
 /* Sound folder */

@@ -23,6 +23,8 @@ Le Launchpad peut être branché / débranché à tout moment, y compris après 
 Si un autre logiciel (DAW, autre appli MIDI) utilise déjà le Launchpad, le message s'affiche sous le Launchpad et ControlCast réessaie toutes les 2 secondes.
 
 ## Sauvegarde de la configuration (résistante aux plantages)
+**Chaque modification est enregistrée automatiquement** (indicateur *Saved ✓* en haut du panneau, plus besoin de bouton SAVE).
+
 La configuration est dans `%APPDATA%\ControlCast\config.json` (même emplacement que les anciennes versions : elle est reprise telle quelle).
 
 * Chaque enregistrement est écrit dans un fichier temporaire, **forcé sur le disque**, puis remplacé de façon atomique : un écran bleu ou une coupure de courant ne peut plus effacer la configuration.

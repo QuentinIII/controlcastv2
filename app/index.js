@@ -217,7 +217,7 @@ function createMainWindow() {
     }
     const crashed = win.webContents.isCrashed && win.webContents.isCrashed();
     if (!shutdownDone && !crashed && pendingEdits) {
-      // Unsaved key edits: never lose them silently
+      // Key edits not written yet: save them before closing
       e.preventDefault();
       if (askingUnsaved) return;
       askingUnsaved = true;
@@ -304,24 +304,9 @@ function createMainWindow() {
 }
 
 
-// Ask what to do with unsaved key edits. Resolves 'save' | 'discard' | 'cancel'
+// Save the pending key edits before closing. Resolves 'save' | 'discard' | 'cancel'
 async function askUnsavedEdits(win) {
-  if (!win.isVisible() || win.isMinimized()) showMainWindow();
-  const { response } = await dialog.showMessageBox(win, {
-    type: 'warning',
-    buttons: ['Save', "Don't save", 'Cancel'],
-    defaultId: 0,
-    cancelId: 2,
-    noLink: true,
-    title: 'ControlCast',
-    message: 'Some key settings have not been saved.',
-    detail: 'Save them before closing ControlCast?',
-  });
-  if (response === 2) return 'cancel';
-  if (response === 1) {
-    logger.info('Closing: unsaved key edits discarded by user');
-    return 'discard';
-  }
+  // Edits are saved automatically; this catches the last one (made < 0.4 s before closing)
   const saved = await new Promise(resolve => {
     const timer = setTimeout(() => resolve(false), 3000);
     ipcMain.once('edit:saved', (e, ok) => {
@@ -330,8 +315,9 @@ async function askUnsavedEdits(win) {
     });
     send('edit:save');
   });
-  logger.info(`Closing: unsaved key edits ${saved ? 'saved' : 'COULD NOT BE SAVED'}`);
+  logger.info(`Closing: last key edits ${saved ? 'saved' : 'COULD NOT BE SAVED'}`);
   if (!saved) {
+    if (!win.isVisible() || win.isMinimized()) showMainWindow();
     const r = await dialog.showMessageBox(win, {
       type: 'error',
       buttons: ['Close anyway', 'Cancel'],

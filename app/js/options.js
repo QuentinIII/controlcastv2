@@ -20,17 +20,42 @@ function keyChanged(keyConfig) {
 }
 
 let lastPendingState = null;
+let autoSaveTimer = null;
+const AUTOSAVE_DELAY = 400; // ms after the last change (typing in a text field...)
+
+// Every change is saved automatically, shortly after the last edit
 function updateSaveState() {
   const pending = Object.keys(tempKeys).length > 0;
-  $('#save_settings').toggleClass('pending', pending);
   if (pending !== lastPendingState) {
     lastPendingState = pending;
-    ipc.send('edit:pending', pending); // Lets the main process warn before closing
+    ipc.send('edit:pending', pending); // The main process saves them if the app closes meanwhile
+  }
+  if (pending) {
+    setSaveStatus('saving');
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      autoSaveTimer = null;
+      saveSettings();
+    }, AUTOSAVE_DELAY);
   }
 }
 
+function setSaveStatus(state) {
+  const el = $('#save_status');
+  el.removeClass('saved saving error');
+  if (state === 'saving') el.addClass('saving').text('Saving...');
+  else if (state === 'error') el.addClass('error').text('NOT SAVED!');
+  else el.addClass('saved').html('Saved &#10003;');
+}
+
 // Write the edited keys to the configuration; returns true when safely on disk
-function saveSettings(quiet) {
+function saveSettings() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = null;
+  if (!Object.keys(tempKeys).length) {
+    setSaveStatus('saved');
+    return true;
+  }
   const keys = config.get('keys') || {};
   for (const key of Object.keys(tempKeys)) keys[key] = tempKeys[key];
   config.set('keys', removeDefaultKeys(keys));
@@ -38,18 +63,21 @@ function saveSettings(quiet) {
   updateSaveState();
   // Wait for the file to be really written (flushed to disk) before confirming
   const ok = config.flush();
-  if (!quiet) {
-    if (ok) centerNOTY('success', 'Save Successful!');
-    else centerNOTY('error', 'Saving failed! See the log file (Help &gt; Open logs folder).', 5000);
-  }
+  setSaveStatus(ok ? 'saved' : 'error');
+  if (!ok) centerNOTY('error', 'Saving failed! See the log file (Help &gt; Open logs folder).', 5000);
   loadTracks();
   return ok;
 }
 
+// Reload (Ctrl+R): do not lose the last edit
+window.addEventListener('beforeunload', () => {
+  if (Object.keys(tempKeys).length) saveSettings();
+});
+
 ipc.on('edit:save', () => {
   let ok = false;
   try {
-    ok = saveSettings(true);
+    ok = saveSettings();
   } catch (err) {
     log.error('Save before closing failed', err);
   }
@@ -110,16 +138,6 @@ function readyOptions() {
     showColorSelect(wrap, color);
     keyChanged(keyConfig);
   });
-
-  $('#discard_settings').on('click', () => {
-    tempKeys = {};
-    setKeyOptions();
-    setAllLights();
-    loadTracks();
-    updateSaveState();
-  });
-
-  $('#save_settings').on('click', () => saveSettings());
 
   $('#kill_audio').on('click', () => stopAllAudio());
   ipc.on('audio:stop-all', () => stopAllAudio());
