@@ -2,6 +2,20 @@
 
 Format : chaque version en français puis en anglais. / Each version in French, then English.
 
+## [0.6.0] - 2026-11-16
+
+### 🇫🇷 Nouveautés
+- **Volume général (MASTER)** sous le Launchpad : s'applique à tous les sons, en plus du volume de chaque touche.
+- **Choix de la sortie son (OUTPUT)** : tous les sons peuvent aller vers une sortie précise (VoiceMeeter Input, VoiceMeeter Aux Input, casque, haut-parleurs...) au lieu de la sortie Windows par défaut. Bouton ↻ pour actualiser la liste.
+- **Sortie par touche** (section Audio, ligne *Output*) : une touche peut utiliser une autre sortie que la sortie générale (par exemple jingles vers le stream, son de test dans le casque).
+- Si une sortie choisie est débranchée, les sons passent par la sortie Windows par défaut et la sortie manquante est affichée en rouge ; elle est réutilisée automatiquement quand elle revient.
+
+### 🇬🇧 New
+- **Master volume (MASTER)** under the Launchpad: applies to every sound, on top of each key's volume.
+- **Audio output selection (OUTPUT)**: every sound can go to a specific output (VoiceMeeter Input, VoiceMeeter Aux Input, headphones, speakers...) instead of the Windows default output. ↻ button to refresh the list.
+- **Per-key output** (Audio section, *Output* row): a key can use another output than the main one (e.g. jingles to the stream, a test sound in the headphones).
+- If a chosen output is unplugged, sounds use the Windows default output and the missing output is shown in red; it is used again automatically when it comes back.
+
 ## [0.5.0] - 2026-11-16
 
 Première version stable de la refonte pour Windows 11 (regroupe les versions de test 0.4.0 à 0.4.4).

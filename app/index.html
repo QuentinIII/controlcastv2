@@ -9,6 +9,7 @@
     <script src="js/init.js"></script>
     <script src="js/launchpad.js"></script>
     <script src="js/options.js"></script>
+    <script src="js/audio-output.js"></script>
     <script src="js/clr.js"></script>
 </head>
 <body>
@@ -199,6 +200,12 @@
                             </div>
                             <span id="vol_val">100%</span>
                         </div>
+                    </div>
+                </div>
+                <div>
+                    <span class="title">Output</span>
+                    <div>
+                        <select id="audio_output" title="Audio output for this key (VoiceMeeter input, headphones...)"></select>
                     </div>
                 </div>
                 <div>
@@ -659,6 +666,18 @@
     </div>
 </div>
 <div class="below_launchpad">
+    <div class="master_audio">
+        <div class="master_row">
+            <span class="master_title">MASTER</span>
+            <div id="master_slider_container"><div id="master_slider"></div></div>
+            <span id="master_val">100%</span>
+        </div>
+        <div class="master_row">
+            <span class="master_title">OUTPUT</span>
+            <select id="global_output" title="Audio output used by every key"></select>
+            <button id="refresh_outputs" title="Refresh the list of audio outputs">&#8635;</button>
+        </div>
+    </div>
     <button id="kill_audio">KILL AUDIO</button>
     <button id="flush_clr">FLUSH CLR</button>
     <div class="lp_status">Launchpad not connected</div>

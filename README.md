@@ -23,6 +23,9 @@ Chaque touche du Launchpad peut :
 * appeler une adresse web (GET) avec retour lumineux (jaune = en cours, vert = OK, rouge = erreur) ;
 * afficher une image / un gif animé dans OBS via le *CLR Browser* (source navigateur).
 
+#### Volume général et sortie son (VoiceMeeter)
+Sous le Launchpad, **MASTER** règle le volume de tous les sons et **OUTPUT** choisit la sortie son (par exemple *VoiceMeeter Input* ou *VoiceMeeter Aux Input*) ; ↻ actualise la liste. Dans la section **Audio**, la ligne *Output* permet à une touche d'utiliser une autre sortie que la sortie générale. Si une sortie est débranchée, les sons passent par la sortie Windows par défaut (sortie affichée en rouge) jusqu'à son retour.
+
 #### Dossier de sons
 Dans la section **Audio**, *FOLDER* relie un dossier de sons (sous-dossiers compris) et *RELOAD* relit son contenu. Un champ de recherche filtre la liste ; **clic** sur un son pour l'attribuer à la touche, **double-clic** pour l'écouter.
 
@@ -86,6 +89,9 @@ Each Launchpad key can:
 * **stop every sound at once** (*STOP ALL SOUNDS* option in the Audio section);
 * call a web address (GET) with light feedback (yellow = pending, green = OK, red = error);
 * show an image / animated gif in OBS through the *CLR Browser* (browser source).
+
+#### Master volume and audio output (VoiceMeeter)
+Under the Launchpad, **MASTER** sets the volume of every sound and **OUTPUT** picks the audio output (e.g. *VoiceMeeter Input* or *VoiceMeeter Aux Input*); ↻ refreshes the list. In the **Audio** section, the *Output* row lets a key use another output than the main one. If an output is unplugged, sounds use the Windows default output (shown in red) until it comes back.
 
 #### Sound folder
 In the **Audio** section, *FOLDER* links a folder of sounds (sub-folders included) and *RELOAD* re-reads it. A search field filters the list; **click** a sound to assign it to the key, **double-click** to preview it.
