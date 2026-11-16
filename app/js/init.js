@@ -245,6 +245,7 @@ config.onChange(p => {
     stopAllAudio();
     forEachKey(key => lights.reset(key));
     loadSoundFolder();
+    updateSaveState();
     setAllLights();
     loadTracks();
     setKeyOptions();

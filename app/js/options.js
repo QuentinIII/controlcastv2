@@ -19,9 +19,42 @@ function keyChanged(keyConfig) {
   updateSaveState();
 }
 
+let lastPendingState = null;
 function updateSaveState() {
-  $('#save_settings').toggleClass('pending', Object.keys(tempKeys).length > 0);
+  const pending = Object.keys(tempKeys).length > 0;
+  $('#save_settings').toggleClass('pending', pending);
+  if (pending !== lastPendingState) {
+    lastPendingState = pending;
+    ipc.send('edit:pending', pending); // Lets the main process warn before closing
+  }
 }
+
+// Write the edited keys to the configuration; returns true when safely on disk
+function saveSettings(quiet) {
+  const keys = config.get('keys') || {};
+  for (const key of Object.keys(tempKeys)) keys[key] = tempKeys[key];
+  config.set('keys', removeDefaultKeys(keys));
+  tempKeys = {};
+  updateSaveState();
+  // Wait for the file to be really written (flushed to disk) before confirming
+  const ok = config.flush();
+  if (!quiet) {
+    if (ok) centerNOTY('success', 'Save Successful!');
+    else centerNOTY('error', 'Saving failed! See the log file (Help &gt; Open logs folder).', 5000);
+  }
+  loadTracks();
+  return ok;
+}
+
+ipc.on('edit:save', () => {
+  let ok = false;
+  try {
+    ok = saveSettings(true);
+  } catch (err) {
+    log.error('Save before closing failed', err);
+  }
+  ipc.send('edit:saved', ok);
+});
 
 function buildColorSelects() {
   $('.color_select').each((i, el) => {
@@ -86,20 +119,7 @@ function readyOptions() {
     updateSaveState();
   });
 
-  $('#save_settings').on('click', () => {
-    const keys = config.get('keys') || {};
-    for (const key of Object.keys(tempKeys)) keys[key] = tempKeys[key];
-    config.set('keys', removeDefaultKeys(keys));
-    tempKeys = {};
-    updateSaveState();
-    // Wait for the file to be really written (flushed to disk) before confirming
-    if (config.flush()) {
-      centerNOTY('success', 'Save Successful!');
-    } else {
-      centerNOTY('error', 'Saving failed! See the log file (Help &gt; Open logs folder).', 5000);
-    }
-    loadTracks();
-  });
+  $('#save_settings').on('click', () => saveSettings());
 
   $('#kill_audio').on('click', () => stopAllAudio());
   ipc.on('audio:stop-all', () => stopAllAudio());

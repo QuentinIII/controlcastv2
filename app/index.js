@@ -44,6 +44,8 @@ const store = new ConfigStore({
   logger,
   validate: data => data !== null && typeof data === 'object' && !Array.isArray(data),
 });
+logger.info(`Configuration loaded from ${store.file}: ${Object.keys(store.get('keys') || {}).length} keys` +
+  (store.recovery ? ` (RECOVERED from ${store.recovery.from}: ${store.recovery.reason})` : ''));
 if (store.get('app.version') !== CONFIG_VERSION) {
   logger.info(`Migrating configuration from v${store.get('app.version')} to v${CONFIG_VERSION}`);
   store.snapshot(true);
@@ -88,6 +90,8 @@ let portWindow = null;
 let tray = null;
 let quitting = false;
 let shutdownDone = false;
+let pendingEdits = false; // Unsaved key edits in the window
+let askingUnsaved = false;
 const crashTimes = [];
 const startHidden = process.argv.includes('--hidden');
 
@@ -194,7 +198,10 @@ function createMainWindow() {
   win.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith('file://')) e.preventDefault();
   });
-  win.webContents.on('did-start-loading', () => hotkeys.releaseAll());
+  win.webContents.on('did-start-loading', () => {
+    hotkeys.releaseAll();
+    pendingEdits = false;
+  });
 
   win.on('moved', () => {
     const [x, y] = win.getPosition();
@@ -208,7 +215,25 @@ function createMainWindow() {
       win.setSkipTaskbar(true);
       return;
     }
-    if (!shutdownDone && !(win.webContents.isCrashed && win.webContents.isCrashed())) {
+    const crashed = win.webContents.isCrashed && win.webContents.isCrashed();
+    if (!shutdownDone && !crashed && pendingEdits) {
+      // Unsaved key edits: never lose them silently
+      e.preventDefault();
+      if (askingUnsaved) return;
+      askingUnsaved = true;
+      askUnsavedEdits(win).then(choice => {
+        askingUnsaved = false;
+        if (choice === 'cancel') {
+          quitting = false;
+          return;
+        }
+        pendingEdits = false;
+        quitting = true;
+        if (!win.isDestroyed()) win.close();
+      });
+      return;
+    }
+    if (!shutdownDone && !crashed) {
       // Let the renderer turn the Launchpad lights off and close the MIDI ports
       e.preventDefault();
       quitting = true;
@@ -230,6 +255,10 @@ function createMainWindow() {
   // Windows is logging off / shutting down: make sure everything is on disk
   win.on('query-session-end', () => {
     quitting = true; // Never block Windows shutdown with "close to tray"
+    if (pendingEdits) {
+      pendingEdits = false;
+      send('edit:save'); // No time to ask: keep the edits
+    }
     store.flushSync();
   });
   win.on('session-end', () => {
@@ -272,6 +301,49 @@ function createMainWindow() {
       win.show();
     }
   });
+}
+
+
+// Ask what to do with unsaved key edits. Resolves 'save' | 'discard' | 'cancel'
+async function askUnsavedEdits(win) {
+  if (!win.isVisible() || win.isMinimized()) showMainWindow();
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['Save', "Don't save", 'Cancel'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+    title: 'ControlCast',
+    message: 'Some key settings have not been saved.',
+    detail: 'Save them before closing ControlCast?',
+  });
+  if (response === 2) return 'cancel';
+  if (response === 1) {
+    logger.info('Closing: unsaved key edits discarded by user');
+    return 'discard';
+  }
+  const saved = await new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), 3000);
+    ipcMain.once('edit:saved', (e, ok) => {
+      clearTimeout(timer);
+      resolve(ok);
+    });
+    send('edit:save');
+  });
+  logger.info(`Closing: unsaved key edits ${saved ? 'saved' : 'COULD NOT BE SAVED'}`);
+  if (!saved) {
+    const r = await dialog.showMessageBox(win, {
+      type: 'error',
+      buttons: ['Close anyway', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+      message: 'The settings could not be saved.',
+      detail: `See the log file in ${logger.dir}`,
+    });
+    return r.response === 0 ? 'discard' : 'cancel';
+  }
+  return 'save';
 }
 
 
@@ -588,7 +660,13 @@ ipcMain.on('config:set', (e, p, value) => {
 });
 
 ipcMain.on('config:flush', e => {
-  e.returnValue = store.flushSync();
+  const ok = store.flushSync();
+  logger.info(`Configuration saved to ${store.file} (${Object.keys(store.get('keys') || {}).length} keys)${ok ? '' : ' - FAILED'}`);
+  e.returnValue = ok;
+});
+
+ipcMain.on('edit:pending', (e, pending) => {
+  pendingEdits = !!pending;
 });
 
 ipcMain.on('app:startup-info', e => {
@@ -685,6 +763,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   hotkeys.releaseAll();
   store.flushSync();
+  logger.info(`Configuration written on exit (${Object.keys(store.get('keys') || {}).length} keys)`);
   clr.stop();
   if (tray) tray.destroy();
   logger.info('ControlCast stopped');
