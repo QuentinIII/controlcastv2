@@ -4,7 +4,7 @@
  * ControlCast - main process
  */
 
-const { app, BrowserWindow, ipcMain, Menu, Tray, dialog, shell, powerMonitor, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Tray, dialog, shell, powerMonitor, screen, session } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -712,6 +712,11 @@ app.whenReady().then(() => {
   } catch (err) {
     logger.warn('Login item check failed:', err.message);
   }
+
+  // Needed to list audio outputs by name and to route sounds to them (VoiceMeeter...)
+  // (the app only loads its own local pages)
+  session.defaultSession.setPermissionCheckHandler(() => true);
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(true));
 
   for (const step of [buildMenus, createTray, createMainWindow]) {
     try {

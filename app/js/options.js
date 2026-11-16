@@ -151,7 +151,7 @@ function readyOptions() {
     slide: (event, ui) => {
       $('#vol_val').text(`${ui.value}%`);
       const track = tracks[lastKey.join(',')];
-      if (track) track.volume = ui.value / 100;
+      if (track) track.volume = (ui.value / 100) * masterVolume();
     },
     change: (event, ui) => {
       if (settingOptions || !event.originalEvent) return; // Programmatic change
@@ -438,6 +438,7 @@ function setKeyOptions() {
     checkmarks();
     setIcons(lastKey, keyConfig);
     markCurrentSound();
+    if (typeof outputsReady !== 'undefined' && outputsReady) renderOutputSelects();
   } finally {
     settingOptions = false;
   }
@@ -606,7 +607,8 @@ function readySoundFolder() {
     if (same) return; // Second double-click stops the preview
     previewAudio = new Audio(toMediaUrl(file));
     previewAudio.ccFile = file;
-    previewAudio.volume = Math.min(1, Math.max(0, (parseInt(getKeyConfig(lastKey).audio.volume, 10) || 100) / 100));
+    previewAudio.volume = effectiveVolume(getKeyConfig(lastKey).audio);
+    applySink(previewAudio, getKeyConfig(lastKey).audio);
     previewAudio.play().catch(err => log.warn('Preview failed', err.message));
   });
 

@@ -176,9 +176,9 @@ function getTrack(keyStr, audio) {
     track = createTrack(keyStr, audio);
     tracks[keyStr] = track;
   }
-  const vol = parseInt(audio.volume, 10);
-  track.volume = Math.min(1, Math.max(0, (isNaN(vol) ? 100 : vol) / 100));
+  track.volume = effectiveVolume(audio); // Key volume x master volume
   track.loop = !!audio.loop;
+  applySink(track, audio); // Output device (global or per key)
   return track;
 }
 

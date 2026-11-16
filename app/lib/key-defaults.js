@@ -31,6 +31,7 @@ function defaultKeyConfig() {
       loop: false,
       exclusive: false, // stop the other sounds when this one starts
       stop_all: false, // this key stops every sound playing (and plays nothing)
+      output: { id: '', label: '' }, // audio output for this key ('' = main output)
     },
     api: {
       path: '',
@@ -70,6 +71,8 @@ function appDefaults() {
       start_minimized: false,
       disable_gpu: false,
       audio_folder: '', // Folder of sounds listed in the Audio section
+      master_volume: 100, // Multiplies every key volume
+      audio_output: { id: '', label: '' }, // Main audio output ('' = Windows default)
       clr: {
         enabled: false,
         port: 3000,

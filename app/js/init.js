@@ -216,6 +216,7 @@ $(document).ready(() => {
 
   readyLaunchpad();
   readyOptions();
+  readyAudioOutput();
 
   $('body').fadeIn(120);
 

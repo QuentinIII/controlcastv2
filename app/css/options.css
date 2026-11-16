@@ -551,3 +551,90 @@ label.widest {
 .audio.stop_all_mode .content > div:not(.stop_all_row) {
     display: none !important;
 }
+
+/* Master volume / audio output */
+
+.master_audio {
+    width: 380px;
+    margin-bottom: 14px;
+    padding: 8px 10px;
+    background: #18191A;
+    border-radius: 3px;
+}
+
+.master_row {
+    display: flex;
+    align-items: center;
+    height: 30px;
+}
+
+.master_title {
+    width: 70px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #9a9fa3;
+}
+
+#master_slider_container {
+    width: 220px;
+    margin: 0 12px 0 4px;
+}
+
+#master_slider {
+    height: 10px;
+    width: 220px;
+    background: url('../images/volume-empty.png') no-repeat left top;
+    background-size: 220px 10px;
+    border: none;
+    outline: none;
+    position: relative;
+}
+
+#master_slider .ui-slider-range-min {
+    height: 10px;
+    position: absolute;
+    background: url('../images/volume-full.png') no-repeat left top;
+    background-size: 220px 10px;
+    border: none;
+}
+
+#master_slider .ui-slider-handle {
+    width: 25px;
+    height: 25px;
+    background: url('../images/volume-knob.png') no-repeat left top;
+    background-size: 25px 25px;
+    position: absolute;
+    top: -8px;
+    margin-left: -12px;
+    cursor: pointer;
+    outline: none;
+    border: none;
+}
+
+#master_val {
+    font-size: 12px;
+    width: 40px;
+}
+
+#global_output, #audio_output {
+    background: #18191A;
+    border: 1px solid #555;
+    border-radius: 2px;
+    height: 24px;
+    color: #DDD;
+    width: 262px;
+    color-scheme: dark;
+}
+
+#global_output.missing {
+    border-color: #F26C6A;
+    color: #F26C6A;
+}
+
+.below_launchpad #refresh_outputs {
+    width: 30px;
+    margin-left: 6px;
+    background: #2B2D30;
+    color: #DDD;
+    font-size: 14px;
+}
