@@ -190,3 +190,14 @@
     position: absolute;
     bottom: 20px;
 }
+
+.key.ORANGE {
+    background: radial-gradient(#FF6A00, #7A3A14);
+    border-color: #6B3414;
+}
+
+.key.YELLOW {
+    background: radial-gradient(#F4FF00, #7D7F1E);
+    border-color: #5F611C;
+}
+
