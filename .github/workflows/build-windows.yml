@@ -47,9 +47,11 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: ControlCast ${{ steps.version.outputs.version }}
+          # master = stable release marked "Latest"; other branches = separate "-beta" test release
+          tag_name: v${{ steps.version.outputs.version }}${{ github.ref != 'refs/heads/master' && '-beta' || '' }}
+          name: ControlCast ${{ steps.version.outputs.version }}${{ github.ref != 'refs/heads/master' && ' (beta)' || '' }}
           target_commitish: ${{ github.sha }}
           prerelease: ${{ github.ref != 'refs/heads/master' }}
+          make_latest: ${{ github.ref == 'refs/heads/master' && 'true' || 'false' }}
           files: dist/*.exe
           body_path: release-notes.md
