@@ -355,3 +355,100 @@ input[type="text"].num_input {
 input#hotkey_string, input#api_path {
     width: 260px;
 }
+
+.color_select .ORANGE {
+    background: #FF7A1A;
+}
+
+.color_select .YELLOW {
+    background: #EEF25A;
+}
+
+input[type="checkbox"].opt_bool {
+    display: none;
+}
+
+.playing_light .subtext {
+    position: static;
+}
+
+.lp_status {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #5b5f62;
+    max-width: 400px;
+}
+
+.lp_status.connected {
+    color: #69BD45;
+}
+
+.hotkey_warning {
+    color: #F26C6A;
+    font-size: 11px;
+}
+
+/* Lightweight notifications (replaces noty + animate.css flips) */
+
+#toasts {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+.toast {
+    pointer-events: auto;
+    min-width: 260px;
+    max-width: 520px;
+    margin: 4px 0;
+    padding: 12px 16px;
+    border-radius: 4px;
+    background: #2B2D30;
+    color: #EEE;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .6);
+    opacity: 0;
+    transform: scale(.96);
+    transition: opacity .15s ease-out, transform .15s ease-out;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.toast.success {
+    background: #24B24B;
+}
+
+.toast.error, .toast.warning {
+    background: #C0392B;
+}
+
+.toast.notify, .toast.notification {
+    background: #3A6EA5;
+}
+
+.toast .toast_buttons {
+    margin-top: 10px;
+}
+
+.toast .toast_buttons button {
+    margin: 0 4px;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 2px;
+    background: #EC5d0F;
+    color: #FFF;
+    cursor: pointer;
+}
+
+#save_settings.pending {
+    box-shadow: 0 0 0 2px #FEBF0F;
+}

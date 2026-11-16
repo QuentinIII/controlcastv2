@@ -1,42 +1,65 @@
 {
-  "name": "ControlCast",
-  "version": "0.3.4",
-  "description": "ControlCast",
-  "main": "./app",
-  "scripts": {
-    "start": "electron ./app"
-  },
+  "name": "controlcast",
+  "productName": "ControlCast",
+  "version": "0.4.0",
+  "description": "ControlCast - Launchpad controller for streamers",
+  "main": "app/index.js",
+  "homepage": "https://github.com/QuentinIII/controlcastv2",
   "author": "DBKynd",
-  "devDependencies": {
-    "electron": "^1.6.3",
-    "grunt": "^1.0.1",
-    "grunt-aws-s3": "^0.14.5",
-    "grunt-contrib-clean": "^1.0.0",
-    "grunt-electron-installer": "^2.1.0",
-    "grunt-electron-packager": "^0.0.8",
-    "grunt-shell": "^2.1.0",
-    "load-grunt-tasks": "^3.5.2"
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder --win --x64",
+    "dist:dir": "electron-builder --win --x64 --dir"
   },
   "dependencies": {
-    "electron": "^1.6.3",
-    "electron-config": "^0.2.1",
-    "express": "^4.15.2",
-    "jquery": "^3.2.0",
-    "keycode": "^2.1.8",
-    "launchpadder": "0.0.5",
-    "midi": "^0.9.5",
-    "moment": "^2.17.1",
-    "noty": "^2.4.1",
-    "request": "^2.81.0",
-    "robotjs": "github:dbkynd/robotjs",
-    "simpleflakes": "^1.2.3",
-    "socket.io": "^1.7.3",
-    "superagent": "^3.5.0",
-    "underscore": "^1.8.3",
-    "usb-detection": "^1.4.0",
-    "winston": "^2.3.1",
-    "winston-loggly-bulk": "^1.4.1",
-    "woopra": "^0.2.0"
+    "@jitsi/robotjs": "0.6.24",
+    "@julusian/midi": "3.9.0",
+    "express": "^4.21.2",
+    "jquery": "^3.7.1",
+    "keycode": "^2.2.1",
+    "socket.io": "^4.8.1"
   },
-  "releaseUrl": "https://controlcast.s3.amazonaws.com"
+  "devDependencies": {
+    "electron": "44.11.3",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.controlcast.app",
+    "productName": "ControlCast",
+    "copyright": "Copyright (C) 2016 DBKynd",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "app/**/*",
+      "package.json",
+      "!app/clr/assets/images/**"
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "app/images/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "ControlCast",
+      "installerIcon": "app/images/icon.ico",
+      "uninstallerIcon": "app/images/icon.ico"
+    }
+  }
 }

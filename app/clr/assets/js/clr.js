@@ -1,4 +1,4 @@
-var io = io(document.location.href.replace("http", "ws"));
+var socket = io({ reconnectionDelayMax: 2000 });
 var images = {};
 
 $(document).ready(function () {
@@ -14,11 +14,11 @@ $(document).ready(function () {
     $('body').show();
 });
 
-io.on('connected', function () {
+socket.on('connected', function () {
     console.log('connection ok');
 });
 
-io.on('images', function (data) {
+socket.on('images', function (data) {
     console.log('image list');
     images = data;
     for (var image in images) {
@@ -29,7 +29,7 @@ io.on('images', function (data) {
     }
 });
 
-io.on('image_change', function (data) {
+socket.on('image_change', function (data) {
     console.log('image change');
     images[data.key] = {
         image: new Image(),
@@ -38,11 +38,11 @@ io.on('image_change', function (data) {
     images[data.key].image.src = data.src;
 });
 
-io.on('flush', function () {
+socket.on('flush', function () {
     $('body').empty();
 });
 
-io.on('key_press', function (data) {
+socket.on('key_press', function (data) {
     console.log('key ' + data.key + " pressed");
     if (!images[data.key] || !images[data.key].src) return;
     var animate = {

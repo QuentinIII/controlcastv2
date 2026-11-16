@@ -1,286 +1,303 @@
 'use strict';
-/* eslint no-inline-comments: 0 */
 /* eslint no-unused-vars: 0 */
 /* eslint no-undef: 0 */
-/* eslint no-console: 0 */
+
+/*
+ * Key actions: lights, audio, web request, CLR browser and hotkeys.
+ */
 
 // All midi and gui key events land here
 function keyEvent(source, key, action, edit) {
-  // console.log(`${source} key ${action === 'press' ? 'pressed' : 'release'}: ${key}`); // Log the key action
   const keyConfig = getKeyConfig(key);
-  if (!edit) { // Only perform these actions if left-click on key - no right-click
-    colorKey(key, action, keyConfig); // Color the key based on the action
-    playAudio(key, action, keyConfig); // Play Audio if used
-    sendAPI(key, action, keyConfig); // Send API event if used
-    sendCLR(key, action, keyConfig); // Send CLR event if used
-    sendHotkey(key, action, keyConfig); // Send Hotkey if used
+  if (!edit) { // Right-click only selects the key for editing
+    const steps = [handleLights, playAudio, sendAPI, sendCLR, sendHotkey];
+    for (const step of steps) {
+      try {
+        step(key, action, keyConfig);
+      } catch (err) {
+        log.error(`Key ${key.join(',')} ${action} (${step.name}) failed:`, err);
+      }
+    }
   }
   if (action === 'press') {
-    $('.options .key_pos_label').text(`(${key.join(',')})`); // Change key label to show last pressed key
-    lastKey = key; // Update what the last key pressed was
-    setKeyOptions(); // Update the Edit key options fields
+    const changed = lastKey[0] !== key[0] || lastKey[1] !== key[1];
+    lastKey = key;
+    if (changed || edit) {
+      $('.options .key_pos_label').text(`(${key.join(',')})`);
+      setKeyOptions();
+    }
   }
 }
 
-function readyLaunchpad() { // On DOM ready
+function readyLaunchpad() {
   const launchpadGuiKey = $('.launchpad .key');
-  launchpadGuiKey.mousedown((event) => { // Launchpad gui key was pressed
-    const key = getKeyPosition(event.currentTarget); // Get key position array
-    if (event.which === 3) { // Mouse click was a 'right-click'
+  launchpadGuiKey.on('contextmenu', e => e.preventDefault());
+  launchpadGuiKey.on('mousedown', event => {
+    const key = getKeyPosition(event.currentTarget);
+    if (event.which === 3) {
       keyEvent('gui', key, 'press', 'right-click');
       return;
     }
-    keyEvent('gui', key, 'press'); // Forward to key event handler
+    if (event.which !== 1) return;
+    $(event.currentTarget).addClass('held');
+    keyEvent('gui', key, 'press');
   });
-
-  launchpadGuiKey.mouseup((event) => { // Launchpad gui key was released
-    releasedKey(event.currentTarget);
+  launchpadGuiKey.on('mouseup', event => {
+    if (!$(event.currentTarget).hasClass('held')) return;
+    $(event.currentTarget).removeClass('held');
+    keyEvent('gui', getKeyPosition(event.currentTarget), 'release');
   });
-
-  launchpadGuiKey.mouseleave((event) => { // Mouse left Launchpad gui key
-    // Release if mouse left key while pressed
-    if ($(event.currentTarget).hasClass('pressed')) releasedKey(event.currentTarget);
+  launchpadGuiKey.on('mouseleave', event => {
+    // Release if the mouse left the key while pressed
+    if (!$(event.currentTarget).hasClass('held')) return;
+    $(event.currentTarget).removeClass('held');
+    keyEvent('gui', getKeyPosition(event.currentTarget), 'release');
   });
 }
 
-// Find the respective gui element with the key position
 function getGuiKey(key) {
   if (Array.isArray(key)) key = key.join(',');
-  return $(`.launchpad .key[data-pos='${key}']`);
+  return $(guiKeys.get(key) || []);
 }
 
-function releasedKey(that) { // Gui key was released
-  keyEvent('gui', getKeyPosition(that), 'release'); // Forward to key event handler
+function getKeyPosition(el) {
+  return String(el.dataset.pos).split(',').map(n => parseInt(n, 10));
 }
 
-function getKeyPosition(that) {
-  const pos = $(that).data('pos').split(','); // Gets key position number
-  pos[0] = parseInt(pos[0]);
-  pos[1] = parseInt(pos[1]);
-  return pos; // Returns key position as an array
+
+// Lights
+
+
+function markPressed(key, pressed) {
+  const el = guiKeys.get(key.join(','));
+  if (el) el.classList.toggle('pressed', pressed);
+  $(`.c${key.join('-')}`).toggleClass('pressed', pressed);
 }
 
-function setAllLights() { // Sets all key lights to their released state color (background color)
+function handleLights(key, action, keyConfig) {
+  markPressed(key, action === 'press');
+  if (keyConfig.light.mode === 'toggle') {
+    if (action === 'press') {
+      lights.setLatched(key, lights.isLatched(key) ? null : keyConfig.color.press);
+    }
+    return;
+  }
+  lights.setPressed(key, action === 'press' ? keyConfig.color.press : null);
+}
+
+// Apply the idle colour of a key (after load / edit)
+function applyKeyLights(key, keyConfig) {
+  lights.setBase(key, keyConfig.color.release);
+  if (keyConfig.light.mode !== 'toggle') lights.setLatched(key, null);
+  else if (lights.isLatched(key)) lights.setLatched(key, keyConfig.color.press);
+  const track = tracks[key.join(',')];
+  if (track && !track.paused && !track.ended) lights.setPlaying(key, keyConfig.light.playing);
+  else lights.setPlaying(key, null);
+}
+
+function forEachKey(fn) {
   for (let c = 0; c <= 8; c++) {
     for (let r = 0; r <= 8; r++) {
-      if (c === 8 && r === 8) break; // 8,8 does not exist on the pad
-      const keyConfig = getKeyConfig([c, r]);
-      colorKey([c, r], 'release', keyConfig); // Color the button
-      setIcons([c, r], keyConfig);
+      if (c === 8 && r === 8) continue; // 8,8 does not exist on the pad
+      fn([c, r]);
     }
   }
 }
 
+function setAllLights() {
+  forEachKey(key => {
+    const keyConfig = getKeyConfig(key);
+    applyKeyLights(key, keyConfig);
+    setIcons(key, keyConfig);
+  });
+}
+
+// Kept for compatibility with older code paths
 function colorKey(key, action, keyConfig) {
-  const guiKey = getGuiKey(key); // Find key in DOM
-  guiKey.removeClass(guiKey.data('color')); // Remove old color class
-  const keyColor = keyConfig.color[action] || 'OFF'; // Try to get key color
-  guiKey.addClass(keyColor); // Add new key color class
-  guiKey.data('color', keyColor); // Store color to data attribute
+  applyKeyLights(key, keyConfig);
+}
+
+
+// Audio
+
+
+function audioIsPlaying(track) {
+  return !!track && !track.paused && !track.ended;
+}
+
+function stopAudio(track) {
+  if (!track) return;
+  try {
+    track.pause();
+    track.currentTime = 0;
+  } catch (e) { /* ignore */ }
+}
+
+function stopAllAudio(exceptKey) {
+  for (const k of Object.keys(tracks)) {
+    if (k !== exceptKey) stopAudio(tracks[k]);
+  }
+}
+
+function disposeTrack(track) {
+  track.ccSrc = null;
+  try {
+    track.pause();
+    track.removeAttribute('src');
+    track.load();
+  } catch (e) { /* ignore */ }
+}
+
+function createTrack(keyStr, audio) {
+  const url = toMediaUrl(audio.path);
+  const track = new Audio();
+  track.preload = 'auto';
+  track.ccSrc = url;
+  const key = keyStr.split(',').map(Number);
+  track.addEventListener('playing', () => lights.setPlaying(key, getKeyConfig(key).light.playing));
+  const stopped = () => lights.setPlaying(key, null);
+  track.addEventListener('pause', stopped);
+  track.addEventListener('ended', stopped);
+  track.addEventListener('emptied', stopped);
+  track.addEventListener('error', () => {
+    stopped();
+    if (!track.ccSrc) return;
+    log.warn(`Audio error on key ${keyStr} (${audio.path}): ${track.error && track.error.message}`);
+  });
+  track.src = url;
+  return track;
+}
+
+function getTrack(keyStr, audio) {
+  let track = tracks[keyStr];
+  const url = toMediaUrl(audio.path);
+  if (!track || track.ccSrc !== url) {
+    if (track) disposeTrack(track);
+    track = createTrack(keyStr, audio);
+    tracks[keyStr] = track;
+  }
+  const vol = parseInt(audio.volume, 10);
+  track.volume = Math.min(1, Math.max(0, (isNaN(vol) ? 50 : vol) / 100));
+  track.loop = !!audio.loop;
+  return track;
+}
+
+function loadTracks() {
+  const keys = config.get('keys') || {};
+  const wanted = {};
+  for (const k of Object.keys(keys)) {
+    const audio = keys[k] && keys[k].audio;
+    if (audio && audio.path) wanted[k] = completeKeyConfig(keys[k]).audio;
+  }
+  for (const k of Object.keys(tracks)) {
+    if (!wanted[k]) {
+      disposeTrack(tracks[k]);
+      delete tracks[k];
+    }
+  }
+  for (const k of Object.keys(wanted)) getTrack(k, wanted[k]);
+}
+
+function startTrack(keyStr, track) {
+  try {
+    track.currentTime = 0;
+  } catch (e) { /* not loaded yet */ }
+  const p = track.play();
+  if (p && p.catch) {
+    p.catch(err => {
+      if (err.name === 'AbortError') return; // Stopped before it started
+      log.warn(`Cannot play audio for key ${keyStr}: ${err.message}`);
+      lights.setStatus(keyStr, 'RED', 800);
+    });
+  }
+}
+
+function playAudio(key, action, keyConfig) {
+  const audio = keyConfig.audio;
+  if (!audio || !audio.path) return;
+  const keyStr = key.join(',');
+  const track = getTrack(keyStr, audio);
   if (action === 'press') {
-    guiKey.addClass('pressed');
-    $(`.c${key.join('-')}`).addClass('pressed');
-  } else {
-    guiKey.removeClass('pressed');
-    $(`.c${key.join('-')}`).removeClass('pressed');
-  }
-  if (launchpad) { // Set midi color if launchpad is connected
-    const button = launchpad.getButton(key[0], key[1]); // Get button object
-    button.light(color[keyColor]); // Color the key
+    if (!audioIsPlaying(track)) {
+      if (audio.exclusive) stopAllAudio(keyStr);
+      startTrack(keyStr, track);
+      return;
+    }
+    switch (audio.type) {
+      case 'toggle':
+        stopAudio(track);
+        break;
+      case 'restart':
+        if (audio.exclusive) stopAllAudio(keyStr);
+        startTrack(keyStr, track);
+        break;
+      default:
+      // normal / hold: keep playing
+    }
+  } else if (action === 'release' && audio.type === 'hold') {
+    stopAudio(track);
   }
 }
 
-ipc.on('all_dark', () => { // Message to turn off all the midi key lights
-  if (launchpad) launchpad.allDark(); // Turn off all lights if launchpad is connected
-});
 
-function stopAudio(track) { // Stops the track
-  const tmp = track.src; // Stores the current source
-  track.src = ''; // Clears the source, this is what actually stops the audio
-  track.src = tmp; // Restore the source for next play
-}
+// Hotkeys (simulated by the main process)
 
-function playAudio(key, action, keyConfig) { // Handle Audio playback
-  const audio = keyConfig.audio; // Get key audio settings if they exist
-  if (!audio || !audio.path) return; // Return if no settings or disabled
-  const track = tracks[key.join(',')]; // Get loaded track from memory
-  const audioPath = path.normalize(audio.path);
-  switch (action) {
-    case 'press':
-      if (!track) { // Track was just created in edit mode
-        tracks[key.join(',')] = new Audio(audioPath); // Create and add new track to tracks
-        tracks[key.join(',')].play(); // Play Track
-        return;
-      }
-      if (!track.played || track.played.length === 0 || track.ended) {
-        // Start the track if it hasn't played before or has finished playing
-        track.play();
-        return;
-      }
-      if (!track.ended) { // What do we do if the key is repressed while the track is playing
-        switch (audio.type) {
-          case 'toggle': // Stops the track
-            stopAudio(track);
-            break;
-          case 'restart': // Restarts the track
-            stopAudio(track);
-            track.play();
-            break;
-          default:
-          // Do Nothing
-        }
-        return;
-      }
-      break;
-    case 'release':
-      if (!track) return;
-      if (track && !track.ended && audio.type === 'hold') {
-        stopAudio(track); // Stop audio on release if that is what's set
-      }
-      break;
-    default:
-    // Do Nothing
-  }
-}
 
 function sendHotkey(key, action, keyConfig) {
-  const hotkey = keyConfig.hotkey; // Get key audio settings if they exist
-  if (!hotkey || !hotkey.string) return; // Return if no settings or disabled
-  const keys = hotkey.string.split(' + '); // Split hotkey string into an array
-  switch (hotkey.type) {
-    case 'send': // Send and release hotkeys
-      if (action !== 'press') return;
-      kbAction(keys, 'down', () => {
-        kbAction(keys, 'up');
-      });
-      break;
-    case 'hold':
-      switch (action) {
-        case 'press': // Hold hotkeys
-          kbAction(keys, 'down');
-          break;
-        case 'release': // Release Hotkeys
-          kbAction(keys, 'up');
-          break;
-        default:
-        // Do Nothing
-      }
-      break;
-    default:
-    // Do Nothing
+  const hotkey = keyConfig.hotkey;
+  if (!hotkey || !hotkey.string) return;
+  if (hotkey.type === 'hold') {
+    ipc.send(action === 'press' ? 'hotkey:down' : 'hotkey:up', hotkey.string);
+  } else if (action === 'press') {
+    ipc.send('hotkey:send', hotkey.string);
   }
 }
 
-function resolveKey(key) { // Match up the different key names from the 2 different libraries we are using
-  key = key.toLowerCase();
-  if (key.startsWith('numpad')) {
-    switch (key.split(' ')[1]) {
-      case '/':
-        return 'numpad_divide';
-      case '*':
-        return 'numpad_multiply';
-      case '-':
-        return 'numpad_minus';
-      case '+':
-        return 'numpad_plus';
-      case '.':
-        return 'numpad_decimal';
-      default:
-        return key.replace(' ', '_');
-    }
-  }
-  switch (key) {
-    case 'l-ctrl':
-      return 'left_control';
-    case 'r-ctrl':
-      return 'right_control';
-    case 'l-shift':
-      return 'left_shift';
-    case 'r-shift':
-      return 'right_shift';
-    case 'l-alt':
-      return 'left_alt';
-    case 'r-alt':
-      return 'right_alt';
-    case 'esc':
-      return 'escape';
-    case 'page up':
-      return 'pageup';
-    case 'page down':
-      return 'pagedown';
-    default:
-      return key;
-  }
-}
 
-function kbAction(keys, action, callback) {
-  for (let i = 0; i < keys.length; i++) {
-    let c = keyboard[keys[i]] || 0;
-    switch (action) {
-      case 'down':
-        c++;
-        keyboard[keys[i]] = c;
-        if (c > 1) continue;
-        break;
-      case 'up':
-        c--;
-        keyboard[keys[i]] = c;
-        if (c !== 0) continue;
-        break;
-      default:
-      // Do Nothing
-    }
-    ipc.send('robot_key', { key: resolveKey(keys[i]), action: action });
-  }
-  if (callback) return callback();
-  return null;
-}
+// CLR Browser
+
 
 function sendCLR(key, action, keyConfig) {
-  if (action === 'release') return;
+  if (action !== 'press') return;
   if (!config.get('app.clr.enabled')) return;
   const clr = keyConfig.clr;
   if (!clr || !clr.path) return;
-  clrIO.emit('key_press', { key: key.join(','), options: clr });
+  ipc.send('clr:key-press', { key: key.join(','), options: clr });
+}
+
+
+// GET request
+
+
+function normalizeUrl(str) {
+  str = String(str || '').trim();
+  if (!str) return null;
+  if (!/^https?:\/\//i.test(str)) str = `http://${str}`;
+  try {
+    return new URL(str).href;
+  } catch (e) {
+    return null;
+  }
 }
 
 function sendAPI(key, action, keyConfig) {
-  if (action === 'release') return;
+  if (action !== 'press') return;
   const api = keyConfig.api;
   if (!api || !api.path) return;
-  if (!isURL(api.path)) return;
-  const oldColor = keyConfig.color.release;
-  keyConfig.color.release = 'YELLOW';
-  colorKey(key, 'release', keyConfig);
-  fetch
-    .get(api.path)
-    .then(res => {
-      if (res.statusCode !== 200) {
-        err();
-      } else if (res.body.error) {
-        err();
-      } else {
-        ok();
+  const url = normalizeUrl(api.path);
+  if (!url) return;
+  lights.setStatus(key, 'YELLOW', 0); // Pending
+  fetch(url, { signal: AbortSignal.timeout(10000), cache: 'no-store' })
+    .then(async res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if ((res.headers.get('content-type') || '').includes('json')) {
+        const body = await res.json().catch(() => ({}));
+        if (body && body.error) throw new Error(String(body.error));
       }
-    }, () => {
-      err();
+      lights.setStatus(key, 'GREEN', 1500);
+    })
+    .catch(err => {
+      log.warn(`GET request for key ${key.join(',')} failed: ${err.message}`);
+      lights.setStatus(key, 'RED', 1500);
     });
-
-  function ok() {
-    keyConfig.color.release = 'GREEN';
-    colorKey(key, 'release', keyConfig);
-    setTimeout(() => {
-      keyConfig.color.release = oldColor;
-      colorKey(key, 'release', keyConfig);
-    }, 1500);
-  }
-
-  function err() {
-    keyConfig.color.release = 'RED';
-    colorKey(key, 'release', keyConfig);
-    setTimeout(() => {
-      keyConfig.color.release = oldColor;
-      colorKey(key, 'release', keyConfig);
-    }, 1500);
-  }
 }

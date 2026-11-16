@@ -1,7 +1,6 @@
 @import url("open_sans.css");
 @import url('launchpad.css');
 @import url('options.css');
-@import url('animate.css');
 
 body {
     font: 14px/140% "Open Sans", sans-serif;
@@ -49,7 +48,7 @@ header img {
     z-index: 100;
 }
 
-#update_available {
+#update_available_unused {
     position: absolute;
     top: 15px;
     right: 15px;
