@@ -4,8 +4,9 @@ Application de bureau pour piloter son stream avec un Launchpad (Novation).
 ## Que fait-elle ?
 Chaque touche du Launchpad peut :
 * envoyer (`Send`) ou maintenir (`Hold`) une combinaison de touches clavier (OBS, Discord, ...) ;
-* jouer un son local ou distant (normal, toggle, restart, hold, en boucle, en coupant les autres sons) ;
+* jouer un son local ou distant (volume à 100 % par défaut ; normal, toggle, restart, hold, en boucle, en coupant les autres sons) ;
   un **dossier de sons** peut être relié dans la section Audio (bouton *FOLDER*, *RELOAD* pour le relire) : clic sur un son pour l'attribuer à la touche, double-clic pour l'écouter, champ de recherche pour filtrer ;
+* **couper tous les sons d'un coup** (option *STOP ALL SOUNDS* de la section Audio) ;
 * appeler une adresse web (GET) avec retour visuel (jaune = en cours, vert = OK, rouge = erreur) ;
 * afficher une image / un gif animé dans OBS via le *CLR Browser* (source navigateur).
 

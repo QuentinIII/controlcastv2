@@ -177,7 +177,7 @@ function getTrack(keyStr, audio) {
     tracks[keyStr] = track;
   }
   const vol = parseInt(audio.volume, 10);
-  track.volume = Math.min(1, Math.max(0, (isNaN(vol) ? 50 : vol) / 100));
+  track.volume = Math.min(1, Math.max(0, (isNaN(vol) ? 100 : vol) / 100));
   track.loop = !!audio.loop;
   return track;
 }
@@ -187,7 +187,7 @@ function loadTracks() {
   const wanted = {};
   for (const k of Object.keys(keys)) {
     const audio = keys[k] && keys[k].audio;
-    if (audio && audio.path) wanted[k] = completeKeyConfig(keys[k]).audio;
+    if (audio && audio.path && !audio.stop_all) wanted[k] = completeKeyConfig(keys[k]).audio;
   }
   for (const k of Object.keys(tracks)) {
     if (!wanted[k]) {
@@ -214,7 +214,15 @@ function startTrack(keyStr, track) {
 
 function playAudio(key, action, keyConfig) {
   const audio = keyConfig.audio;
-  if (!audio || !audio.path) return;
+  if (!audio) return;
+  if (audio.stop_all) { // "Stop all sounds" key
+    if (action === 'press') {
+      stopAllAudio();
+      if (typeof stopPreview === 'function') stopPreview();
+    }
+    return;
+  }
+  if (!audio.path) return;
   const keyStr = key.join(',');
   const track = getTrack(keyStr, audio);
   if (action === 'press') {

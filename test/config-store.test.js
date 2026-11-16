@@ -39,7 +39,7 @@ test('reads a config written by the old electron-config (tabs, no new fields)', 
   assert.strictEqual(s.get('app.clr.port'), 4000);
   assert.strictEqual(s.get('app.start_minimized'), false); // filled from defaults
   const migrated = migrate(s.getAll());
-  assert.strictEqual(migrated.app.version, 7);
+  assert.strictEqual(migrated.app.version, 8);
   assert.strictEqual(migrated.keys['0,0'].light.playing.mode, 'none');
   assert.strictEqual(migrated.keys['0,0'].color.press, 'RED');
 });
@@ -140,4 +140,21 @@ test('export / import round trip, import keeps a snapshot of the previous config
   assert.deepStrictEqual(s.get('keys'), userKeys);
   assert.ok(s.listBackups().length >= before);
   assert.throws(() => s.importFrom(path.join(dir, 'missing.json')));
+});
+
+test('v8 migration: volumes left at the old default (50%) become 100%, custom volumes are kept', () => {
+  const data = {
+    app: { version: 7 },
+    keys: {
+      '0,0': { audio: { path: 'a.mp3', volume: '50' } },
+      '0,1': { audio: { path: 'b.mp3', volume: '35' } },
+      '0,2': { color: { press: 'RED', release: 'OFF' } },
+    },
+  };
+  const m = migrate(data);
+  assert.strictEqual(m.app.version, 8);
+  assert.strictEqual(m.keys['0,0'].audio.volume, '100');
+  assert.strictEqual(m.keys['0,1'].audio.volume, '35');
+  assert.strictEqual(m.keys['0,2'].audio.volume, '100');
+  assert.strictEqual(m.keys['0,2'].audio.stop_all, false);
 });

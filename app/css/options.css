@@ -516,3 +516,24 @@ input[type="checkbox"].opt_bool {
     position: static;
     margin-top: 2px;
 }
+
+/* Stop all sounds key */
+
+label.widest {
+    width: 140px;
+}
+
+.stop_all_col {
+    display: flex;
+    flex-direction: column;
+}
+
+.stop_all_col .subtext {
+    position: static;
+    margin-top: 2px;
+}
+
+/* A "stop all" key plays nothing: hide the sound settings */
+.audio.stop_all_mode .content > div:not(.stop_all_row) {
+    display: none !important;
+}

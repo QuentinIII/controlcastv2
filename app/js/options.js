@@ -251,6 +251,10 @@ function readyOptions() {
     if (settingOptions) return;
     const keyConfig = editKeyConfig(lastKey);
     setProp(keyConfig, $(event.currentTarget).data('config'), event.currentTarget.checked);
+    if (event.currentTarget.id === 'audio_stop_all') {
+      $('.audio').toggleClass('stop_all_mode', event.currentTarget.checked);
+      if (event.currentTarget.checked) stopAudio(tracks[lastKey.join(',')]);
+    }
     keyChanged(keyConfig);
   });
 
@@ -344,7 +348,7 @@ function togglePlayingRows(keyConfig) {
 
 function setIcons(key, keyConfig) {
   const usingHotkey = keyConfig.hotkey.string;
-  const usingAudio = keyConfig.audio.path;
+  const usingAudio = keyConfig.audio.path || keyConfig.audio.stop_all;
   const usingAPI = keyConfig.api.path;
   const usingCLR = config.get('app.clr.enabled') ? keyConfig.clr.path : null;
   const icons = [];
@@ -378,6 +382,8 @@ function setKeyOptions() {
     radio('audio_type', keyConfig.audio.type);
     $('#audio_loop').prop('checked', !!keyConfig.audio.loop);
     $('#audio_exclusive').prop('checked', !!keyConfig.audio.exclusive);
+    $('#audio_stop_all').prop('checked', !!keyConfig.audio.stop_all);
+    $('.audio').toggleClass('stop_all_mode', !!keyConfig.audio.stop_all);
     $('#api_path').val(keyConfig.api.path);
     $('#clr_path').val(keyConfig.clr.path);
     $('#clr_pos').val(keyConfig.clr.pos);
@@ -403,7 +409,7 @@ function checkmarks() {
   const k = getKeyConfig(lastKey);
   $('.color .check_mark').toggle(k.color.press !== 'OFF' || k.color.release !== 'OFF' || k.light.mode !== 'momentary');
   $('.hotkey .check_mark').toggle(k.hotkey.string !== '');
-  $('.audio .check_mark').toggle(k.audio.path !== '');
+  $('.audio .check_mark').toggle(k.audio.path !== '' || !!k.audio.stop_all);
   $('.playing_light .check_mark').toggle(k.light.playing.mode !== 'none');
   $('.api_request .check_mark').toggle(k.api.path !== '');
   $('.clr_options .check_mark').toggle(k.clr.path !== '');
@@ -562,7 +568,7 @@ function readySoundFolder() {
     if (same) return; // Second double-click stops the preview
     previewAudio = new Audio(toMediaUrl(file));
     previewAudio.ccFile = file;
-    previewAudio.volume = Math.min(1, Math.max(0, (parseInt(getKeyConfig(lastKey).audio.volume, 10) || 50) / 100));
+    previewAudio.volume = Math.min(1, Math.max(0, (parseInt(getKeyConfig(lastKey).audio.volume, 10) || 100) / 100));
     previewAudio.play().catch(err => log.warn('Preview failed', err.message));
   });
 
