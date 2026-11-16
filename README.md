@@ -5,6 +5,7 @@ Application de bureau pour piloter son stream avec un Launchpad (Novation).
 Chaque touche du Launchpad peut :
 * envoyer (`Send`) ou maintenir (`Hold`) une combinaison de touches clavier (OBS, Discord, ...) ;
 * jouer un son local ou distant (normal, toggle, restart, hold, en boucle, en coupant les autres sons) ;
+  un **dossier de sons** peut être relié dans la section Audio (bouton *FOLDER*, *RELOAD* pour le relire) : clic sur un son pour l'attribuer à la touche, double-clic pour l'écouter, champ de recherche pour filtrer ;
 * appeler une adresse web (GET) avec retour visuel (jaune = en cours, vert = OK, rouge = erreur) ;
 * afficher une image / un gif animé dans OBS via le *CLR Browser* (source navigateur).
 
@@ -26,7 +27,7 @@ La configuration est dans `%APPDATA%\ControlCast\config.json` (même emplacement
 * Chaque enregistrement est écrit dans un fichier temporaire, **forcé sur le disque**, puis remplacé de façon atomique : un écran bleu ou une coupure de courant ne peut plus effacer la configuration.
 * La version précédente est gardée dans `config.json.bak` et des copies horodatées sont conservées dans `%APPDATA%\ControlCast\backups` (30 dernières).
 * Au démarrage, si `config.json` est abîmé (vide, rempli de zéros, tronqué), ControlCast **restaure automatiquement** la dernière copie valide, vous prévient, et met le fichier abîmé de côté (`config.corrupt-*.json`) au lieu de l'écraser.
-* Menu **File** : exporter / importer la configuration, restaurer une sauvegarde automatique, ouvrir le dossier des réglages.
+* Menu **File** : exporter / importer la configuration, restaurer une sauvegarde automatique, **effacer toute la configuration** (avec avertissement, une copie est sauvegardée avant), ouvrir le dossier des réglages.
 
 ## Stabilité sous Windows 11
 * Electron 44 (au lieu d'Electron 1.6 de 2017), modules natifs N-API précompilés (pas de compilation nécessaire).

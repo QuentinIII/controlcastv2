@@ -147,6 +147,22 @@
             </div>
             <div class="content">
                 <div>
+                    <span class="title">Folder</span>
+                    <div class="audio_folder_row">
+                        <input id="audio_folder" type="text" readonly placeholder="No sound folder connected">
+                        <button id="audio_folder_browse" title="Choose a folder of sounds">FOLDER</button>
+                        <button id="audio_folder_reload" title="Reload the folder content">RELOAD</button>
+                    </div>
+                </div>
+                <div class="audio_folder_list">
+                    <span class="title">Sounds</span>
+                    <div class="audio_folder_col">
+                        <input id="audio_filter" type="text" placeholder="Search...">
+                        <select id="audio_files" size="6"></select>
+                        <span class="subtext" id="audio_files_info">Click: assign to the key - Double-click: preview</span>
+                    </div>
+                </div>
+                <div>
                     <span class="title">Path</span>
                     <div>
                         <div class="clear">

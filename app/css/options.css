@@ -452,3 +452,67 @@ input[type="checkbox"].opt_bool {
 #save_settings.pending {
     box-shadow: 0 0 0 2px #FEBF0F;
 }
+
+/* Sound folder */
+
+.audio_folder_row {
+    display: flex;
+    align-items: center;
+}
+
+.options .audio_folder_row input[type="text"] {
+    width: 130px;
+    margin-right: 5px;
+    color: #AAA;
+}
+
+.options .audio_folder_row button {
+    width: 62px;
+    margin-left: 3px;
+}
+
+.audio_folder_list {
+    display: none !important;
+}
+
+.audio_folder_list.visible {
+    display: flex !important;
+}
+
+.audio_folder_col {
+    display: flex;
+    flex-direction: column;
+}
+
+.options .audio_folder_col input[type="text"] {
+    width: 262px;
+    margin-bottom: 4px;
+}
+
+#audio_files {
+    color-scheme: dark;
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: #18191A !important;
+    width: 268px;
+    background: #18191A;
+    color: #DDD;
+    border: 1px solid #555;
+    border-radius: 2px;
+    outline: none;
+    font-size: 12px;
+}
+
+#audio_files option {
+    padding: 1px 3px;
+}
+
+#audio_files option:checked {
+    background: #EC5d0F linear-gradient(#EC5d0F, #EC5d0F);
+    color: #FFF;
+}
+
+#audio_files_info {
+    position: static;
+    margin-top: 2px;
+}

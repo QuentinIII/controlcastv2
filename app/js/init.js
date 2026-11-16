@@ -240,8 +240,11 @@ $(document).ready(() => {
 
 config.onChange(p => {
   if (p === null) {
-    // Whole configuration replaced (import / restore)
+    // Whole configuration replaced (import / restore / reset)
     tempKeys = {};
+    stopAllAudio();
+    forEachKey(key => lights.reset(key));
+    loadSoundFolder();
     setAllLights();
     loadTracks();
     setKeyOptions();

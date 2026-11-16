@@ -358,12 +358,47 @@ async function importConfig(defaultPath) {
     const migrated = migrate(store.getAll());
     store.replace(migrated);
     store.flushSync();
-    send('config:reset', store.getAll());
     buildMenus();
     applyClr();
     toast('success', 'Configuration imported');
   } catch (err) {
     toast('error', `Import failed: ${err.message}`, 5000);
+  }
+}
+
+async function resetConfig() {
+  const answer = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Erase everything', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+    title: 'Reset configuration',
+    message: 'Erase the whole ControlCast configuration?',
+    detail: 'Every key (colours, lights, hotkeys, sounds, web requests, CLR) and every setting ' +
+      'will be reset to default.\n\nA copy of the current configuration is saved first: ' +
+      'it can be brought back with File > Restore an automatic backup.',
+  });
+  if (answer.response !== 0) return;
+  try {
+    const backup = store.snapshot(true);
+    logger.info(`Configuration reset by user (backup: ${backup})`);
+    const pos = store.get('app.pos');
+    const fresh = appDefaults();
+    fresh.app.pos = pos; // Keep the window where it is
+    store.replace(fresh); // Notifies the window (config:reset)
+    store.flushSync();
+    try {
+      app.setLoginItemSettings({ openAtLogin: false, args: ['--hidden'] });
+    } catch (err) {
+      logger.warn('Login item reset failed:', err.message);
+    }
+    buildMenus();
+    applyClr();
+    toast('success', 'Configuration erased', 2000);
+  } catch (err) {
+    logger.error('Configuration reset failed:', err);
+    toast('error', `Reset failed: ${err.message}`, 5000);
   }
 }
 
@@ -376,6 +411,7 @@ function buildMenus() {
         { label: 'Export configuration...', click: exportConfig },
         { label: 'Import configuration...', click: () => importConfig() },
         { label: 'Restore an automatic backup...', click: () => importConfig(backupsDir()) },
+        { label: 'Reset configuration...', click: resetConfig },
         { label: 'Open settings folder', click: () => shell.openPath(userData) },
         { type: 'separator' },
         {

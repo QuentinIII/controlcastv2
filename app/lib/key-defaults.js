@@ -68,6 +68,7 @@ function appDefaults() {
       auto_start: false,
       start_minimized: false,
       disable_gpu: false,
+      audio_folder: '', // Folder of sounds listed in the Audio section
       clr: {
         enabled: false,
         port: 3000,

@@ -332,6 +332,7 @@ function readyOptions() {
   // General
 
 
+  readySoundFolder();
   $('#flush_clr').on('click', () => ipc.send('clr:flush'));
   ipc.on('clr:show-address', () => clrNoty());
   setKeyOptions();
@@ -392,6 +393,7 @@ function setKeyOptions() {
     }
     checkmarks();
     setIcons(lastKey, keyConfig);
+    markCurrentSound();
   } finally {
     settingOptions = false;
   }
@@ -434,4 +436,136 @@ function toTitleCase(str) {
 
 function setProp(obj, str, val) {
   setPath(obj, str, val);
+}
+
+
+// Sound folder: list the sounds of a folder to assign them quickly
+
+
+let folderFiles = []; // { full, rel, search }
+let folderScan = 0;
+let previewAudio = null;
+
+function samePath(a, b) {
+  if (!a || !b) return false;
+  a = path.normalize(a);
+  b = path.normalize(b);
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+async function scanSoundFolder(dir) {
+  const names = await require('fs').promises.readdir(dir, { recursive: true });
+  return names
+    .filter(n => AUDIO_EXT.includes(path.extname(n).toLowerCase()))
+    .slice(0, 5000)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    .map(rel => ({ full: path.join(dir, rel), rel, search: rel.toLowerCase() }));
+}
+
+function renderSoundList() {
+  const filter = String($('#audio_filter').val() || '').toLowerCase().trim();
+  const words = filter.split(/\s+/).filter(Boolean);
+  const list = document.getElementById('audio_files');
+  const frag = document.createDocumentFragment();
+  let shown = 0;
+  for (const f of folderFiles) {
+    if (words.length && !words.every(w => f.search.includes(w))) continue;
+    const opt = document.createElement('option');
+    opt.value = f.full;
+    opt.textContent = f.rel.replace(/\.[^.\\/]+$/, '');
+    opt.title = f.rel;
+    frag.appendChild(opt);
+    shown++;
+  }
+  list.replaceChildren(frag);
+  $('#audio_files_info').text(folderFiles.length ?
+    `${shown} / ${folderFiles.length} sounds - Click: assign to the key - Double-click: preview` :
+    'No sound found in this folder (mp3, wav, ogg, flac, m4a...)');
+  markCurrentSound();
+}
+
+function markCurrentSound() {
+  const current = getKeyConfig(lastKey).audio.path;
+  const list = document.getElementById('audio_files');
+  if (!list) return;
+  let found = null;
+  for (const opt of list.options) {
+    const match = samePath(opt.value, current);
+    opt.selected = match;
+    if (match) found = opt;
+  }
+  if (!found) list.selectedIndex = -1;
+  else if (found.scrollIntoView) found.scrollIntoView({ block: 'nearest' });
+}
+
+async function loadSoundFolder(notify) {
+  const dir = config.get('app.audio_folder') || '';
+  $('#audio_folder').val(dir ? path.basename(dir) || dir : '').attr('title', dir);
+  $('.audio_folder_list').toggleClass('visible', !!dir);
+  $('#audio_folder_reload').prop('disabled', !dir);
+  if (!dir) {
+    folderFiles = [];
+    return;
+  }
+  const scan = ++folderScan;
+  $('#audio_files_info').text('Loading...');
+  try {
+    const files = await scanSoundFolder(dir);
+    if (scan !== folderScan) return; // A newer scan started meanwhile
+    folderFiles = files;
+    renderSoundList();
+    if (notify) centerNOTY('success', `${files.length} sound${files.length > 1 ? 's' : ''} found`, 1200);
+  } catch (err) {
+    if (scan !== folderScan) return;
+    folderFiles = [];
+    renderSoundList();
+    $('#audio_files_info').text(`Cannot read this folder (${err.code || err.message})`);
+    if (notify) centerNOTY('warning', 'Cannot read the sound folder.', 3000);
+  }
+}
+
+function stopPreview() {
+  if (previewAudio) {
+    previewAudio.pause();
+    previewAudio.removeAttribute('src');
+    previewAudio.load();
+    previewAudio = null;
+  }
+}
+
+function readySoundFolder() {
+  $('#audio_folder_browse').on('click', async () => {
+    const dir = await ipc.invoke('dialog:open-file', {
+      title: 'Choose a folder of sounds',
+      defaultPath: config.get('app.audio_folder') || undefined,
+      properties: ['openDirectory'],
+    });
+    if (!dir) return;
+    config.set('app.audio_folder', dir);
+    $('#audio_filter').val('');
+    loadSoundFolder(true);
+  });
+
+  $('#audio_folder_reload').on('click', () => loadSoundFolder(true));
+  $('#audio_filter').on('input', () => renderSoundList());
+
+  $('#audio_files').on('change', event => {
+    const file = $(event.currentTarget).val();
+    if (!file || samePath(file, getKeyConfig(lastKey).audio.path)) return;
+    $('#audio_path').val(file).trigger('input');
+  });
+
+  $('#audio_files').on('dblclick', 'option', event => {
+    const file = event.currentTarget.value;
+    const same = previewAudio && previewAudio.ccFile === file && !previewAudio.paused;
+    stopPreview();
+    if (same) return; // Second double-click stops the preview
+    previewAudio = new Audio(toMediaUrl(file));
+    previewAudio.ccFile = file;
+    previewAudio.volume = Math.min(1, Math.max(0, (parseInt(getKeyConfig(lastKey).audio.volume, 10) || 50) / 100));
+    previewAudio.play().catch(err => log.warn('Preview failed', err.message));
+  });
+
+  $('#kill_audio').on('click', stopPreview);
+  loadSoundFolder();
 }
