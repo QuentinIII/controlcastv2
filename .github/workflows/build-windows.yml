@@ -41,7 +41,10 @@ jobs:
           name: ControlCast-Setup-${{ steps.version.outputs.version }}
           path: dist/*.exe
 
-      - name: Publish pre-release
+      - name: Release notes
+        run: node scripts/release-notes.js > release-notes.md
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -49,8 +52,4 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: ${{ github.ref != 'refs/heads/master' }}
           files: dist/*.exe
-          body: |
-            Installeur Windows de ControlCast ${{ steps.version.outputs.version }}.
-            Téléchargez `ControlCast-Setup-${{ steps.version.outputs.version }}.exe` ci-dessous et lancez-le.
-            Windows peut afficher « Windows a protégé votre ordinateur » (installeur non signé) :
-            cliquez sur « Informations complémentaires » puis « Exécuter quand même ».
+          body_path: release-notes.md
