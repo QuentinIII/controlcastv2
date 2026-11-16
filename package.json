@@ -59,7 +59,9 @@
       "deleteAppDataOnUninstall": false,
       "shortcutName": "ControlCast",
       "installerIcon": "app/images/icon.ico",
-      "uninstallerIcon": "app/images/icon.ico"
-    }
+      "uninstallerIcon": "app/images/icon.ico",
+      "artifactName": "ControlCast-Setup-${version}.${ext}"
+    },
+    "publish": null
   }
 }
