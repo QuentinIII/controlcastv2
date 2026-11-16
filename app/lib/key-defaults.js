@@ -2,7 +2,7 @@
 
 const { fillDefaults, clone } = require('./config-store');
 
-const CONFIG_VERSION = 7;
+const CONFIG_VERSION = 8;
 
 function defaultKeyConfig() {
   return {
@@ -27,9 +27,10 @@ function defaultKeyConfig() {
     audio: {
       path: '',
       type: 'normal',
-      volume: '50',
+      volume: '100',
       loop: false,
       exclusive: false, // stop the other sounds when this one starts
+      stop_all: false, // this key stops every sound playing (and plays nothing)
     },
     api: {
       path: '',
@@ -68,6 +69,7 @@ function appDefaults() {
       auto_start: false,
       start_minimized: false,
       disable_gpu: false,
+      audio_folder: '', // Folder of sounds listed in the Audio section
       clr: {
         enabled: false,
         port: 3000,
@@ -93,6 +95,15 @@ function migrate(data) {
     for (const k of Object.keys(data.keys)) data.keys[k] = completeKeyConfig(data.keys[k]);
     delete data.app.id;
     v = 7;
+  }
+  if (v < 8) {
+    // v8: default volume is now 100%. Keys still at the old default (50%) follow it.
+    for (const k of Object.keys(data.keys)) {
+      const audio = data.keys[k] && data.keys[k].audio;
+      if (audio && String(audio.volume) === '50') audio.volume = '100';
+      data.keys[k] = completeKeyConfig(data.keys[k]);
+    }
+    v = 8;
   }
   data.app.version = v;
   return data;

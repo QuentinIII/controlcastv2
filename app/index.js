@@ -44,6 +44,8 @@ const store = new ConfigStore({
   logger,
   validate: data => data !== null && typeof data === 'object' && !Array.isArray(data),
 });
+logger.info(`Configuration loaded from ${store.file}: ${Object.keys(store.get('keys') || {}).length} keys` +
+  (store.recovery ? ` (RECOVERED from ${store.recovery.from}: ${store.recovery.reason})` : ''));
 if (store.get('app.version') !== CONFIG_VERSION) {
   logger.info(`Migrating configuration from v${store.get('app.version')} to v${CONFIG_VERSION}`);
   store.snapshot(true);
@@ -88,6 +90,8 @@ let portWindow = null;
 let tray = null;
 let quitting = false;
 let shutdownDone = false;
+let pendingEdits = false; // Unsaved key edits in the window
+let askingUnsaved = false;
 const crashTimes = [];
 const startHidden = process.argv.includes('--hidden');
 
@@ -194,7 +198,10 @@ function createMainWindow() {
   win.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith('file://')) e.preventDefault();
   });
-  win.webContents.on('did-start-loading', () => hotkeys.releaseAll());
+  win.webContents.on('did-start-loading', () => {
+    hotkeys.releaseAll();
+    pendingEdits = false;
+  });
 
   win.on('moved', () => {
     const [x, y] = win.getPosition();
@@ -208,7 +215,25 @@ function createMainWindow() {
       win.setSkipTaskbar(true);
       return;
     }
-    if (!shutdownDone && !(win.webContents.isCrashed && win.webContents.isCrashed())) {
+    const crashed = win.webContents.isCrashed && win.webContents.isCrashed();
+    if (!shutdownDone && !crashed && pendingEdits) {
+      // Key edits not written yet: save them before closing
+      e.preventDefault();
+      if (askingUnsaved) return;
+      askingUnsaved = true;
+      askUnsavedEdits(win).then(choice => {
+        askingUnsaved = false;
+        if (choice === 'cancel') {
+          quitting = false;
+          return;
+        }
+        pendingEdits = false;
+        quitting = true;
+        if (!win.isDestroyed()) win.close();
+      });
+      return;
+    }
+    if (!shutdownDone && !crashed) {
       // Let the renderer turn the Launchpad lights off and close the MIDI ports
       e.preventDefault();
       quitting = true;
@@ -230,6 +255,10 @@ function createMainWindow() {
   // Windows is logging off / shutting down: make sure everything is on disk
   win.on('query-session-end', () => {
     quitting = true; // Never block Windows shutdown with "close to tray"
+    if (pendingEdits) {
+      pendingEdits = false;
+      send('edit:save'); // No time to ask: keep the edits
+    }
     store.flushSync();
   });
   win.on('session-end', () => {
@@ -272,6 +301,35 @@ function createMainWindow() {
       win.show();
     }
   });
+}
+
+
+// Save the pending key edits before closing. Resolves 'save' | 'discard' | 'cancel'
+async function askUnsavedEdits(win) {
+  // Edits are saved automatically; this catches the last one (made < 0.4 s before closing)
+  const saved = await new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), 3000);
+    ipcMain.once('edit:saved', (e, ok) => {
+      clearTimeout(timer);
+      resolve(ok);
+    });
+    send('edit:save');
+  });
+  logger.info(`Closing: last key edits ${saved ? 'saved' : 'COULD NOT BE SAVED'}`);
+  if (!saved) {
+    if (!win.isVisible() || win.isMinimized()) showMainWindow();
+    const r = await dialog.showMessageBox(win, {
+      type: 'error',
+      buttons: ['Close anyway', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+      message: 'The settings could not be saved.',
+      detail: `See the log file in ${logger.dir}`,
+    });
+    return r.response === 0 ? 'discard' : 'cancel';
+  }
+  return 'save';
 }
 
 
@@ -358,12 +416,47 @@ async function importConfig(defaultPath) {
     const migrated = migrate(store.getAll());
     store.replace(migrated);
     store.flushSync();
-    send('config:reset', store.getAll());
     buildMenus();
     applyClr();
     toast('success', 'Configuration imported');
   } catch (err) {
     toast('error', `Import failed: ${err.message}`, 5000);
+  }
+}
+
+async function resetConfig() {
+  const answer = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Erase everything', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+    title: 'Reset configuration',
+    message: 'Erase the whole ControlCast configuration?',
+    detail: 'Every key (colours, lights, hotkeys, sounds, web requests, CLR) and every setting ' +
+      'will be reset to default.\n\nA copy of the current configuration is saved first: ' +
+      'it can be brought back with File > Restore an automatic backup.',
+  });
+  if (answer.response !== 0) return;
+  try {
+    const backup = store.snapshot(true);
+    logger.info(`Configuration reset by user (backup: ${backup})`);
+    const pos = store.get('app.pos');
+    const fresh = appDefaults();
+    fresh.app.pos = pos; // Keep the window where it is
+    store.replace(fresh); // Notifies the window (config:reset)
+    store.flushSync();
+    try {
+      app.setLoginItemSettings({ openAtLogin: false, args: ['--hidden'] });
+    } catch (err) {
+      logger.warn('Login item reset failed:', err.message);
+    }
+    buildMenus();
+    applyClr();
+    toast('success', 'Configuration erased', 2000);
+  } catch (err) {
+    logger.error('Configuration reset failed:', err);
+    toast('error', `Reset failed: ${err.message}`, 5000);
   }
 }
 
@@ -376,6 +469,7 @@ function buildMenus() {
         { label: 'Export configuration...', click: exportConfig },
         { label: 'Import configuration...', click: () => importConfig() },
         { label: 'Restore an automatic backup...', click: () => importConfig(backupsDir()) },
+        { label: 'Reset configuration...', click: resetConfig },
         { label: 'Open settings folder', click: () => shell.openPath(userData) },
         { type: 'separator' },
         {
@@ -552,7 +646,13 @@ ipcMain.on('config:set', (e, p, value) => {
 });
 
 ipcMain.on('config:flush', e => {
-  e.returnValue = store.flushSync();
+  const ok = store.flushSync();
+  logger.info(`Configuration saved to ${store.file} (${Object.keys(store.get('keys') || {}).length} keys)${ok ? '' : ' - FAILED'}`);
+  e.returnValue = ok;
+});
+
+ipcMain.on('edit:pending', (e, pending) => {
+  pendingEdits = !!pending;
 });
 
 ipcMain.on('app:startup-info', e => {
@@ -649,6 +749,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   hotkeys.releaseAll();
   store.flushSync();
+  logger.info(`Configuration written on exit (${Object.keys(store.get('keys') || {}).length} keys)`);
   clr.stop();
   if (tray) tray.destroy();
   logger.info('ControlCast stopped');

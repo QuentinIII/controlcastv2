@@ -49,8 +49,7 @@
         <div>
             <div class="save_buttons">
                 <span class="abs-right">
-                    <button id="discard_settings">DISCARD</button>
-                    <button id="save_settings">SAVE</button>
+                    <span id="save_status" class="saved" title="Every change is saved automatically">Saved &#10003;</span>
                 </span>
             </div>
         </div>
@@ -146,6 +145,33 @@
                 </div>
             </div>
             <div class="content">
+                <div class="stop_all_row">
+                    <span class="title">Stop all</span>
+                    <div class="stop_all_col">
+                        <div class="small">
+                            <input id="audio_stop_all" class="opt_bool" data-config="audio.stop_all"
+                                   type="checkbox"><label for="audio_stop_all" class="widest"
+                                   title="Pressing this key stops every sound that is playing">STOP ALL SOUNDS</label>
+                        </div>
+                        <span class="subtext">This key stops every sound playing (it plays no sound itself)</span>
+                    </div>
+                </div>
+                <div>
+                    <span class="title">Folder</span>
+                    <div class="audio_folder_row">
+                        <input id="audio_folder" type="text" readonly placeholder="No sound folder connected">
+                        <button id="audio_folder_browse" title="Choose a folder of sounds">FOLDER</button>
+                        <button id="audio_folder_reload" title="Reload the folder content">RELOAD</button>
+                    </div>
+                </div>
+                <div class="audio_folder_list">
+                    <span class="title">Sounds</span>
+                    <div class="audio_folder_col">
+                        <input id="audio_filter" type="text" placeholder="Search...">
+                        <select id="audio_files" size="6"></select>
+                        <span class="subtext" id="audio_files_info">Click: assign to the key - Double-click: preview</span>
+                    </div>
+                </div>
                 <div>
                     <span class="title">Path</span>
                     <div>

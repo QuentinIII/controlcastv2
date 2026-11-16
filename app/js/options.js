@@ -19,9 +19,70 @@ function keyChanged(keyConfig) {
   updateSaveState();
 }
 
+let lastPendingState = null;
+let autoSaveTimer = null;
+const AUTOSAVE_DELAY = 400; // ms after the last change (typing in a text field...)
+
+// Every change is saved automatically, shortly after the last edit
 function updateSaveState() {
-  $('#save_settings').toggleClass('pending', Object.keys(tempKeys).length > 0);
+  const pending = Object.keys(tempKeys).length > 0;
+  if (pending !== lastPendingState) {
+    lastPendingState = pending;
+    ipc.send('edit:pending', pending); // The main process saves them if the app closes meanwhile
+  }
+  if (pending) {
+    setSaveStatus('saving');
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      autoSaveTimer = null;
+      saveSettings();
+    }, AUTOSAVE_DELAY);
+  }
 }
+
+function setSaveStatus(state) {
+  const el = $('#save_status');
+  el.removeClass('saved saving error');
+  if (state === 'saving') el.addClass('saving').text('Saving...');
+  else if (state === 'error') el.addClass('error').text('NOT SAVED!');
+  else el.addClass('saved').html('Saved &#10003;');
+}
+
+// Write the edited keys to the configuration; returns true when safely on disk
+function saveSettings() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = null;
+  if (!Object.keys(tempKeys).length) {
+    setSaveStatus('saved');
+    return true;
+  }
+  const keys = config.get('keys') || {};
+  for (const key of Object.keys(tempKeys)) keys[key] = tempKeys[key];
+  config.set('keys', removeDefaultKeys(keys));
+  tempKeys = {};
+  updateSaveState();
+  // Wait for the file to be really written (flushed to disk) before confirming
+  const ok = config.flush();
+  setSaveStatus(ok ? 'saved' : 'error');
+  if (!ok) centerNOTY('error', 'Saving failed! See the log file (Help &gt; Open logs folder).', 5000);
+  loadTracks();
+  return ok;
+}
+
+// Reload (Ctrl+R): do not lose the last edit
+window.addEventListener('beforeunload', () => {
+  if (Object.keys(tempKeys).length) saveSettings();
+});
+
+ipc.on('edit:save', () => {
+  let ok = false;
+  try {
+    ok = saveSettings();
+  } catch (err) {
+    log.error('Save before closing failed', err);
+  }
+  ipc.send('edit:saved', ok);
+});
 
 function buildColorSelects() {
   $('.color_select').each((i, el) => {
@@ -76,29 +137,6 @@ function readyOptions() {
     setProp(keyConfig, wrap.data('config'), color);
     showColorSelect(wrap, color);
     keyChanged(keyConfig);
-  });
-
-  $('#discard_settings').on('click', () => {
-    tempKeys = {};
-    setKeyOptions();
-    setAllLights();
-    loadTracks();
-    updateSaveState();
-  });
-
-  $('#save_settings').on('click', () => {
-    const keys = config.get('keys') || {};
-    for (const key of Object.keys(tempKeys)) keys[key] = tempKeys[key];
-    config.set('keys', removeDefaultKeys(keys));
-    tempKeys = {};
-    updateSaveState();
-    // Wait for the file to be really written (flushed to disk) before confirming
-    if (config.flush()) {
-      centerNOTY('success', 'Save Successful!');
-    } else {
-      centerNOTY('error', 'Saving failed! See the log file (Help &gt; Open logs folder).', 5000);
-    }
-    loadTracks();
   });
 
   $('#kill_audio').on('click', () => stopAllAudio());
@@ -251,6 +289,10 @@ function readyOptions() {
     if (settingOptions) return;
     const keyConfig = editKeyConfig(lastKey);
     setProp(keyConfig, $(event.currentTarget).data('config'), event.currentTarget.checked);
+    if (event.currentTarget.id === 'audio_stop_all') {
+      $('.audio').toggleClass('stop_all_mode', event.currentTarget.checked);
+      if (event.currentTarget.checked) stopAudio(tracks[lastKey.join(',')]);
+    }
     keyChanged(keyConfig);
   });
 
@@ -332,6 +374,7 @@ function readyOptions() {
   // General
 
 
+  readySoundFolder();
   $('#flush_clr').on('click', () => ipc.send('clr:flush'));
   ipc.on('clr:show-address', () => clrNoty());
   setKeyOptions();
@@ -343,7 +386,7 @@ function togglePlayingRows(keyConfig) {
 
 function setIcons(key, keyConfig) {
   const usingHotkey = keyConfig.hotkey.string;
-  const usingAudio = keyConfig.audio.path;
+  const usingAudio = keyConfig.audio.path || keyConfig.audio.stop_all;
   const usingAPI = keyConfig.api.path;
   const usingCLR = config.get('app.clr.enabled') ? keyConfig.clr.path : null;
   const icons = [];
@@ -377,6 +420,8 @@ function setKeyOptions() {
     radio('audio_type', keyConfig.audio.type);
     $('#audio_loop').prop('checked', !!keyConfig.audio.loop);
     $('#audio_exclusive').prop('checked', !!keyConfig.audio.exclusive);
+    $('#audio_stop_all').prop('checked', !!keyConfig.audio.stop_all);
+    $('.audio').toggleClass('stop_all_mode', !!keyConfig.audio.stop_all);
     $('#api_path').val(keyConfig.api.path);
     $('#clr_path').val(keyConfig.clr.path);
     $('#clr_pos').val(keyConfig.clr.pos);
@@ -392,6 +437,7 @@ function setKeyOptions() {
     }
     checkmarks();
     setIcons(lastKey, keyConfig);
+    markCurrentSound();
   } finally {
     settingOptions = false;
   }
@@ -401,7 +447,7 @@ function checkmarks() {
   const k = getKeyConfig(lastKey);
   $('.color .check_mark').toggle(k.color.press !== 'OFF' || k.color.release !== 'OFF' || k.light.mode !== 'momentary');
   $('.hotkey .check_mark').toggle(k.hotkey.string !== '');
-  $('.audio .check_mark').toggle(k.audio.path !== '');
+  $('.audio .check_mark').toggle(k.audio.path !== '' || !!k.audio.stop_all);
   $('.playing_light .check_mark').toggle(k.light.playing.mode !== 'none');
   $('.api_request .check_mark').toggle(k.api.path !== '');
   $('.clr_options .check_mark').toggle(k.clr.path !== '');
@@ -434,4 +480,136 @@ function toTitleCase(str) {
 
 function setProp(obj, str, val) {
   setPath(obj, str, val);
+}
+
+
+// Sound folder: list the sounds of a folder to assign them quickly
+
+
+let folderFiles = []; // { full, rel, search }
+let folderScan = 0;
+let previewAudio = null;
+
+function samePath(a, b) {
+  if (!a || !b) return false;
+  a = path.normalize(a);
+  b = path.normalize(b);
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+async function scanSoundFolder(dir) {
+  const names = await require('fs').promises.readdir(dir, { recursive: true });
+  return names
+    .filter(n => AUDIO_EXT.includes(path.extname(n).toLowerCase()))
+    .slice(0, 5000)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    .map(rel => ({ full: path.join(dir, rel), rel, search: rel.toLowerCase() }));
+}
+
+function renderSoundList() {
+  const filter = String($('#audio_filter').val() || '').toLowerCase().trim();
+  const words = filter.split(/\s+/).filter(Boolean);
+  const list = document.getElementById('audio_files');
+  const frag = document.createDocumentFragment();
+  let shown = 0;
+  for (const f of folderFiles) {
+    if (words.length && !words.every(w => f.search.includes(w))) continue;
+    const opt = document.createElement('option');
+    opt.value = f.full;
+    opt.textContent = f.rel.replace(/\.[^.\\/]+$/, '');
+    opt.title = f.rel;
+    frag.appendChild(opt);
+    shown++;
+  }
+  list.replaceChildren(frag);
+  $('#audio_files_info').text(folderFiles.length ?
+    `${shown} / ${folderFiles.length} sounds - Click: assign to the key - Double-click: preview` :
+    'No sound found in this folder (mp3, wav, ogg, flac, m4a...)');
+  markCurrentSound();
+}
+
+function markCurrentSound() {
+  const current = getKeyConfig(lastKey).audio.path;
+  const list = document.getElementById('audio_files');
+  if (!list) return;
+  let found = null;
+  for (const opt of list.options) {
+    const match = samePath(opt.value, current);
+    opt.selected = match;
+    if (match) found = opt;
+  }
+  if (!found) list.selectedIndex = -1;
+  else if (found.scrollIntoView) found.scrollIntoView({ block: 'nearest' });
+}
+
+async function loadSoundFolder(notify) {
+  const dir = config.get('app.audio_folder') || '';
+  $('#audio_folder').val(dir ? path.basename(dir) || dir : '').attr('title', dir);
+  $('.audio_folder_list').toggleClass('visible', !!dir);
+  $('#audio_folder_reload').prop('disabled', !dir);
+  if (!dir) {
+    folderFiles = [];
+    return;
+  }
+  const scan = ++folderScan;
+  $('#audio_files_info').text('Loading...');
+  try {
+    const files = await scanSoundFolder(dir);
+    if (scan !== folderScan) return; // A newer scan started meanwhile
+    folderFiles = files;
+    renderSoundList();
+    if (notify) centerNOTY('success', `${files.length} sound${files.length > 1 ? 's' : ''} found`, 1200);
+  } catch (err) {
+    if (scan !== folderScan) return;
+    folderFiles = [];
+    renderSoundList();
+    $('#audio_files_info').text(`Cannot read this folder (${err.code || err.message})`);
+    if (notify) centerNOTY('warning', 'Cannot read the sound folder.', 3000);
+  }
+}
+
+function stopPreview() {
+  if (previewAudio) {
+    previewAudio.pause();
+    previewAudio.removeAttribute('src');
+    previewAudio.load();
+    previewAudio = null;
+  }
+}
+
+function readySoundFolder() {
+  $('#audio_folder_browse').on('click', async () => {
+    const dir = await ipc.invoke('dialog:open-file', {
+      title: 'Choose a folder of sounds',
+      defaultPath: config.get('app.audio_folder') || undefined,
+      properties: ['openDirectory'],
+    });
+    if (!dir) return;
+    config.set('app.audio_folder', dir);
+    $('#audio_filter').val('');
+    loadSoundFolder(true);
+  });
+
+  $('#audio_folder_reload').on('click', () => loadSoundFolder(true));
+  $('#audio_filter').on('input', () => renderSoundList());
+
+  $('#audio_files').on('change', event => {
+    const file = $(event.currentTarget).val();
+    if (!file || samePath(file, getKeyConfig(lastKey).audio.path)) return;
+    $('#audio_path').val(file).trigger('input');
+  });
+
+  $('#audio_files').on('dblclick', 'option', event => {
+    const file = event.currentTarget.value;
+    const same = previewAudio && previewAudio.ccFile === file && !previewAudio.paused;
+    stopPreview();
+    if (same) return; // Second double-click stops the preview
+    previewAudio = new Audio(toMediaUrl(file));
+    previewAudio.ccFile = file;
+    previewAudio.volume = Math.min(1, Math.max(0, (parseInt(getKeyConfig(lastKey).audio.volume, 10) || 100) / 100));
+    previewAudio.play().catch(err => log.warn('Preview failed', err.message));
+  });
+
+  $('#kill_audio').on('click', stopPreview);
+  loadSoundFolder();
 }
