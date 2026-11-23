@@ -5,7 +5,11 @@
  *
  * - Hot-plug is detected by polling the MIDI port list (cheap, and much more
  *   reliable on Windows 11 than USB events, also after sleep / resume).
- * - Only LED changes are sent (per-button cache) to keep the USB MIDI link quiet.
+ * - LED messages go through a paced queue: the Launchpad MK1 / S / Mini lose
+ *   messages when they receive too many at once (especially right after the
+ *   reset sent on connection), which left some keys dark.
+ * - Only LED changes are sent, and every LED is re-sent periodically so a
+ *   lost message can never leave a key in the wrong state for long.
  * - Every MIDI call is guarded: an unplugged device or a port used by another
  *   application never crashes the app, it is simply retried later.
  */
@@ -27,6 +31,12 @@ class LaunchpadManager extends EventEmitter {
    * @param {object} opts.midi   Module exposing Input and Output (@julusian/midi)
    * @param {number} [opts.pollMs]
    * @param {object} [opts.logger]
+   * @param {boolean} [opts.paced]      Queue LED messages (default true)
+   * @param {number} [opts.batch]       LED messages sent per tick (default 8)
+   * @param {number} [opts.tickMs]      Delay between ticks (default 10 ms => 800 msg/s max)
+   * @param {number} [opts.settleMs]    Wait after the init/reset messages (default 200 ms)
+   * @param {number} [opts.refreshMs]   Re-send every LED this often (default 5 s, 0 = never)
+   * @param {object} [opts.timers]      { setTimeout, clearTimeout, now } (tests)
    */
   constructor(opts) {
     super();
@@ -37,7 +47,22 @@ class LaunchpadManager extends EventEmitter {
     this.output = null;
     this.profile = null;
     this.portName = null;
-    this.leds = new Map(); // "x,y" -> color currently shown on the device
+    this.leds = new Map(); // "x,y" -> last color sent to the device
+    this.desired = new Map(); // "x,y" -> color the key should show
+    this.pending = new Set(); // keys waiting to be sent
+    this.paced = opts.paced !== false;
+    this.batch = opts.batch || 8;
+    this.tickMs = opts.tickMs === undefined ? 10 : opts.tickMs;
+    this.settleMs = opts.settleMs === undefined ? 200 : opts.settleMs;
+    this.refreshMs = opts.refreshMs === undefined ? 5000 : opts.refreshMs;
+    this.timers = opts.timers || {
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: id => clearTimeout(id),
+      now: () => Date.now(),
+    };
+    this._pumpTimer = null;
+    this._holdUntil = 0;
+    this._lastRefresh = 0;
     this._timer = null;
     this._lastError = null;
     this._probeIn = null;
@@ -87,6 +112,8 @@ class LaunchpadManager extends EventEmitter {
       if (!stillHere) {
         this.logger.info(`Launchpad '${this.portName.in}' disconnected`);
         this.disconnect(false);
+      } else if (this.refreshMs && this.timers.now() - this._lastRefresh >= this.refreshMs) {
+        this.refresh();
       }
       return;
     }
@@ -117,6 +144,11 @@ class LaunchpadManager extends EventEmitter {
     this._lastError = null;
     this.leds.clear();
     this._sendAll(this.profile.init());
+    // Let the device finish its reset before sending lights, then send them all
+    this._holdUntil = this.timers.now() + (this.paced ? this.settleMs : 0);
+    this._lastRefresh = this.timers.now();
+    for (const k of this.desired.keys()) this.pending.add(k);
+    this._schedule();
     this.logger.info(`Launchpad '${inPort.name}' connected (${this.profile.label})`);
     this.emit('connected', { name: inPort.name, profile: this.profile.id, label: this.profile.label });
     return true;
@@ -132,6 +164,9 @@ class LaunchpadManager extends EventEmitter {
     this.portName = null;
     this.portIndex = null;
     this.leds.clear();
+    this.pending.clear();
+    if (this._pumpTimer) this.timers.clearTimeout(this._pumpTimer);
+    this._pumpTimer = null;
     this.emit('disconnected');
   }
 
@@ -190,16 +225,65 @@ class LaunchpadManager extends EventEmitter {
   }
 
   setLed(x, y, colorName, force) {
-    if (!this.connected) return;
     const k = `${x},${y}`;
-    if (!force && this.leds.get(k) === colorName) return;
-    if (this._send(this.profile.encode(x, y, colorName))) this.leds.set(k, colorName);
+    this.desired.set(k, colorName);
+    if (!this.connected) return; // Sent on connection
+    if (!force && this.leds.get(k) === colorName && !this.pending.has(k)) return;
+    this.pending.add(k);
+    this._schedule();
+  }
+
+  // Re-send every light (lost messages, device re-plugged...)
+  refresh() {
+    this._lastRefresh = this.timers.now();
+    if (!this.connected) return;
+    for (const k of this.desired.keys()) this.pending.add(k);
+    this._schedule();
+  }
+
+  _schedule() {
+    if (!this.paced) {
+      this._pump();
+      return;
+    }
+    if (this._pumpTimer || !this.pending.size) return;
+    const wait = Math.max(0, this._holdUntil - this.timers.now());
+    this._pumpTimer = this.timers.setTimeout(() => {
+      this._pumpTimer = null;
+      this._pump();
+    }, wait || 0);
+  }
+
+  _pump() {
+    if (!this.connected) return;
+    if (this.paced && this.timers.now() < this._holdUntil) {
+      this._schedule();
+      return;
+    }
+    let sent = 0;
+    for (const k of Array.from(this.pending)) {
+      if (this.paced && sent >= this.batch) break;
+      this.pending.delete(k);
+      const color = this.desired.get(k);
+      const [x, y] = k.split(',').map(Number);
+      if (!this._send(this.profile.encode(x, y, color))) return; // Disconnected
+      this.leds.set(k, color);
+      sent++;
+    }
+    if (this.pending.size && this.paced && !this._pumpTimer) {
+      this._pumpTimer = this.timers.setTimeout(() => {
+        this._pumpTimer = null;
+        this._pump();
+      }, this.tickMs);
+    }
   }
 
   allOff() {
+    for (const k of this.desired.keys()) this.desired.set(k, 'OFF');
     if (!this.connected) return;
+    this.pending.clear();
     this._sendAll(this.profile.allOff());
-    for (const k of this.leds.keys()) this.leds.set(k, 'OFF');
+    for (const k of this.desired.keys()) this.leds.set(k, 'OFF');
   }
 }
 

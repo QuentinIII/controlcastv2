@@ -552,6 +552,8 @@ function buildMenus() {
       label: 'Launchpad',
       submenu: [
         { label: 'Reconnect', click: () => send('launchpad:reconnect') },
+        { label: 'Refresh lights', click: () => send('launchpad:refresh') },
+        { label: 'Test lights (all keys red / green / amber)', click: () => send('launchpad:test') },
         { label: 'Stop all audio', click: () => send('audio:stop-all') },
       ],
     },

@@ -94,9 +94,10 @@ const lights = new LightEngine({
       el.classList.add(color);
       el.dataset.color = color;
     }
-    launchpad.setLed(key[0], key[1], color);
+    if (!lightTestRunning) launchpad.setLed(key[0], key[1], color);
   },
 });
+let lightTestRunning = false;
 
 
 // Notifications
@@ -165,6 +166,30 @@ launchpad.on('press', key => keyEvent('midi', key, 'press'));
 launchpad.on('release', key => keyEvent('midi', key, 'release'));
 
 ipc.on('launchpad:reconnect', () => launchpad.reconnect());
+ipc.on('launchpad:refresh', () => {
+  lights.renderAll(true);
+  launchpad.refresh();
+});
+
+// Light every key in red, green then amber to spot dead LEDs / lost messages
+ipc.on('launchpad:test', async () => {
+  if (lightTestRunning) return;
+  if (!launchpad.connected) {
+    centerNOTY('warning', 'No Launchpad connected.', 2500);
+    return;
+  }
+  lightTestRunning = true;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    for (const color of ['RED', 'GREEN', 'AMBER']) {
+      forEachKey(([x, y]) => launchpad.setLed(x, y, color));
+      await wait(1200);
+    }
+  } finally {
+    lightTestRunning = false;
+    lights.renderAll(true); // Back to the normal lights
+  }
+});
 
 ipc.on('system:resume', () => {
   // USB devices are re-enumerated after sleep: reconnect and resend all lights

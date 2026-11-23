@@ -93,7 +93,7 @@ const quiet = { info() {}, warn() {}, error() {} };
 
 test('manager: hot-plug, events, LED de-duplication, port busy, unplug', () => {
   const { state, midi } = fakeMidi();
-  const lp = new LaunchpadManager({ midi, logger: quiet });
+  const lp = new LaunchpadManager({ midi, logger: quiet, paced: false });
   const events = [];
   lp.on('connected', i => events.push(['connected', i.profile]));
   lp.on('disconnected', () => events.push(['disconnected']));
@@ -130,4 +130,53 @@ test('manager: hot-plug, events, LED de-duplication, port busy, unplug', () => {
   assert.strictEqual(lp.connected, false);
   assert.deepStrictEqual(events.slice(-1)[0], ['disconnected']);
   lp.setLed(1, 1, 'RED'); // No crash while disconnected
+});
+
+test('manager: paced LED queue waits after reset, sends in small batches, re-sends lost lights', () => {
+  const { state, midi } = fakeMidi();
+  let now = 1000;
+  const queue = [];
+  const timers = {
+    setTimeout: (fn, ms) => {
+      queue.push({ fn, at: now + ms });
+      return queue.length;
+    },
+    clearTimeout: () => {},
+    now: () => now,
+  };
+  const run = ms => {
+    const end = now + ms;
+    while (now < end) {
+      now += 1;
+      for (const t of queue.splice(0)) {
+        if (t.at <= now) t.fn();
+        else queue.push(t);
+      }
+    }
+  };
+  const lp = new LaunchpadManager({ midi, logger: quiet, timers, batch: 8, tickMs: 10, settleMs: 200, refreshMs: 5000 });
+  // Lights are requested before the device is plugged in
+  for (let x = 0; x < 8; x++) for (let y = 0; y < 8; y++) lp.setLed(x, y, 'GREEN');
+  state.inputs = ['Launchpad'];
+  state.outputs = ['Launchpad'];
+  lp.poll();
+  assert.deepStrictEqual(state.sent, [[0xB0, 0, 0]]); // Only the reset at first
+  run(150);
+  assert.strictEqual(state.sent.length, 1, 'nothing sent while the device resets');
+  run(70);
+  assert.ok(state.sent.length > 1 && state.sent.length <= 1 + 24, `batched: ${state.sent.length}`);
+  run(200);
+  assert.strictEqual(state.sent.length, 1 + 64, 'all 64 lights sent');
+  // Coalescing: several changes of one key before it is sent = one message
+  state.sent = [];
+  lp.setLed(0, 0, 'RED');
+  lp.setLed(0, 0, 'AMBER');
+  run(20);
+  assert.deepStrictEqual(state.sent, [[0x90, 0, 63]]);
+  // Periodic refresh re-sends everything (a lost message cannot stay forever)
+  state.sent = [];
+  now += 5000;
+  lp.poll();
+  run(200);
+  assert.strictEqual(state.sent.length, 64);
 });

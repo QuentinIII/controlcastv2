@@ -2,6 +2,18 @@
 
 Format : chaque version en français puis en anglais. / Each version in French, then English.
 
+## [0.6.1] - 2026-11-23
+
+### 🇫🇷 Corrections
+- **Lumières du Launchpad qui ne s'allumaient pas toutes** (surtout Launchpad MK1 / S / Mini) : les lumières étaient envoyées d'un seul bloc, juste après la remise à zéro du Launchpad, qui en perdait une partie. Elles sont maintenant envoyées par petits paquets, après un court délai de démarrage.
+- Toutes les lumières sont renvoyées toutes les 5 secondes : une lumière perdue se corrige d'elle-même.
+- Menu **Launchpad** : *Refresh lights* (renvoyer toutes les lumières) et *Test lights* (toutes les touches en rouge, vert puis ambre, pour repérer une LED défectueuse).
+
+### 🇬🇧 Fixes
+- **Launchpad lights not all turning on** (mainly Launchpad MK1 / S / Mini): lights were sent in one burst right after the Launchpad reset, and some were lost. They are now sent in small batches after a short start-up delay.
+- Every light is re-sent every 5 seconds: a lost light fixes itself.
+- **Launchpad** menu: *Refresh lights* (re-send every light) and *Test lights* (every key red, green then amber, to spot a faulty LED).
+
 ## [0.6.0] - 2026-11-16
 
 ### 🇫🇷 Nouveautés
